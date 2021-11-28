@@ -13,7 +13,7 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 0
+# - Milestone 1
 #
 # Which approved additional features have been implemented?
 # - ...
@@ -53,13 +53,13 @@
 		6, 11, 6, 4, 'r', # row 3 - car 1
 		23, 11, 6, 4, 'r', # row 3 - car 2
 		41, 11, 6, 4 'r' # row 3 - car 3
-	logs: .byte 6, 1, 14, 4, 'b',
-		32, 1, 14, 4, 'b',
-		3, 6, 11, 4, 'b',
-		20, 6, 12, 4, 'b',
-		38, 6, 11, 4, 'b',
-		6, 11, 14, 4, 'b',
-		32, 11, 14, 4, 'b'
+	logs: .byte 6, 1, 14, 4, 'b', # row 1 - log 1
+		32, 1, 14, 4, 'b', # row 1 - log 2
+		3, 6, 11, 4, 'b', # row 2 - log 1
+		20, 6, 12, 4, 'b', # row 2 - log 2
+		38, 6, 11, 4, 'b', # row 2 - log 3
+		6, 11, 14, 4, 'b', # row 3 - log 1
+		32, 11, 14, 4, 'b' # row 3 - log 2
 	frogPosition: .byte 30, 52
 	roadPosition: .byte 6, 35
 	waterPosition: .byte 6, 13
@@ -69,9 +69,14 @@ main:
 	lw $s0, displayAddress # $s0 always holds displayAddress (constant) 
 	jal Clear
 	jal Scene
-	jal Frog
-	jal Vehicles
-	jal Water
+	Repaint:
+		jal Frog
+		jal Vehicles
+		jal Water
+		li $v0, 32
+		li $a0, 16
+		syscall
+		j Repaint
 	j Exit
 	
 Clear:
