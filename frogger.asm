@@ -28,27 +28,50 @@
 	red: .word 0xff0000 # 'r'
 	green: .word 0x00ff00 # 'g'
 	blue: .word 0x0000ff # 'b'
-	scene: .byte 0, 0, 58, 6, # border top
-	58, 0, 6, 58, # border right
-	6, 58, 58, 6, # border bottom
-	0, 6, 6, 58, # border left
-	6, 51, 52, 7, # safe bottom
-	6, 29, 52, 6, # safe mid
-	8, 6, 8, 7, # safe top 1
-	18, 6, 8, 7, # safe top 2
-	28, 6, 8, 7, # safe top 3
-	38, 6, 8, 7, # safe top 4
-	48, 6, 8, 7 # safe top 5
-	sceneColors: .byte 'b', 'b', 'b', 'b', 'g', 'g', 'g', 'g', 'g', 'g', 'g'
+	darkGreen: .word 0x008000 # 'f' - stands for frog
+	scene: .byte 0, 0, 58, 6, 'b', # border top
+		58, 0, 6, 58, 'b', # border right
+		6, 58, 58, 6, 'b', # border bottom
+		0, 6, 6, 58, 'b', # border left
+		6, 51, 52, 7, 'g', # safe bottom
+		6, 29, 52, 6, 'g', # safe mid
+		8, 6, 8, 7, 'g', # safe top 1
+		18, 6, 8, 7, 'g', # safe top 2
+		28, 6, 8, 7, 'g', # safe top 3
+		38, 6, 8, 7, 'g', # safe top 4
+		48, 6, 8, 7, 'g' # safe top 5
+	frog: .byte 1, 1, 2, 2, 'f', # body
+		0, 0, 1, 1, 'f', # top left
+		3, 0, 1, 1, 'f', # top right
+		0, 3, 1, 1, 'f', # bottom left
+		3, 3, 1, 1, 'f' # bottom right
+	vehicles: .byte 6, 1, 6, 4, 'r', # row 1 - car 1
+		23, 1, 6, 4, 'r', # row 1 - car 2
+		41, 1, 6, 4, 'r', # row 1 - car 3
+		7, 6, 12, 4, 'r', # row 2 - car 1
+		33, 6, 12, 4, 'r', # row 2 - car 2
+		6, 11, 6, 4, 'r', # row 3 - car 1
+		23, 11, 6, 4, 'r', # row 3 - car 2
+		41, 11, 6, 4 'r' # row 3 - car 3
+	logs: .byte 6, 1, 14, 4, 'b',
+		32, 1, 14, 4, 'b',
+		3, 6, 11, 4, 'b',
+		20, 6, 12, 4, 'b',
+		38, 6, 11, 4, 'b',
+		6, 11, 14, 4, 'b',
+		32, 11, 14, 4, 'b'
+	frogPosition: .byte 30, 52
+	roadPosition: .byte 6, 35
+	waterPosition: .byte 6, 13
 	
 .text
 main:
 	lw $s0, displayAddress # $s0 always holds displayAddress (constant) 
 	jal Clear
-	la $a0, scene
-	li $a1, 11
-	la $a2, sceneColors
-	jal RectArray
+	jal Scene
+	jal Frog
+	jal Vehicles
+	jal Water
 	j Exit
 	
 Clear:
@@ -63,35 +86,90 @@ Clear:
 	addi $sp, $sp, 4
 	jr $ra
 	
-RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is start of color array (mem address)
+Scene:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	la $a0, scene
+	li $a1, 11
+	li $a2, 0
+	jal RectArray
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+Frog:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	lb $a0, frogPosition
+	lb $a1, frogPosition + 1
+	jal GetPos
+	move $a2, $v0
+	la $a0, frog
+	li $a1, 5
+	jal RectArray
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+Vehicles:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	lb $a0, roadPosition
+	lb $a1, roadPosition + 1
+	jal GetPos
+	move $a2, $v0
+	la $a0, vehicles
+	li $a1, 8
+	jal RectArray
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
+Water:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	lb $a0, waterPosition
+	lb $a1, waterPosition + 1
+	jal GetPos
+	move $a2, $v0
+	la $a0, logs
+	li $a1, 8
+	jal RectArray
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+		
+RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (unit)
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	move $s3, $a2 # $s3 preserves origin position (unit)
 	move $s1, $a0 # $s1 is current rect of array (mem address)
-	sll $s2, $a1, 2
-	add $s2, $s2, $s1 # $s2 is end of array (mem address)
-	move $s3, $a2 # $s3 is start of color array (mem address)
+	li $s2, 5
+	mult $a1, $s2
+	mflo $s2
+	add $s2, $a0, $s2 # $s2 is end of array (mem address)
 	NextRect:
-		lbu $a0, 0($s3)
-		jal GetColor
-		move $a1, $v0
 		move $a0, $s1
+		move $a1, $s3
 		jal RectFromMem
-		add $s1, $s1, 4
-		add $s3, $s3, 1
+		add $s1, $s1, 5
 	bne $s1, $s2, NextRect
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
-RectFromMem: # $a0 has the memory address for the rectangle, $a1 has color of current address
+RectFromMem: # $a0 has the memory address for the rectangle, $a1 is origin position (unit)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	move $a3, $a1
-	move $t0, $a0 # $t0 stores the original memory address
+	move $t0, $a0 # $t0 preserves the memory address
+	move $t1, $a1 # $t1 preserves origin position (unit)
+	lbu $a0, 4($t0)
+	jal GetColor
+	move $a3, $v0
 	lb $a0, 0($t0)
 	lb $a1, 1($t0)
 	jal GetPos
-	move $a0, $v0
+	add $a0, $v0, $t1
 	lb $a1, 2($t0)
 	lb $a2, 3($t0)
 	jal Rectangle
@@ -123,12 +201,12 @@ Rectangle: # $a0 has start position (unit), $a1 length (unit), $a2 height (unit)
 	RectangleReturn:
 		jr $ra
 	
-GetPos: # $a0 has x coord (unit), $a1 has y coord (unit), $v0 returns position (unit)
+GetPos: # $a0 has x coord (unit), $a1 has y coord (unit), $v0 returns position (unit) - preserves $t registers
 	sll $v0, $a1, 6
 	add $v0, $v0, $a0
 	jr $ra
 	
-GetColor: # $a0 has color name (char), $v0 returns color (rgb)
+GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $t registers
 	lw $v0, black
 	bne $a0, 'r', NotRed
 	lw $v0, red
@@ -139,6 +217,9 @@ GetColor: # $a0 has color name (char), $v0 returns color (rgb)
 	bne $a0, 'b', NotBlue
 	lw $v0, blue
 	NotBlue:
+	bne $a0, 'f', NotDarkGreen
+	lw $v0, darkGreen
+	NotDarkGreen:
 	jr $ra
 	
 Exit:
