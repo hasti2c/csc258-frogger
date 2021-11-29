@@ -25,6 +25,7 @@
 .data
 	displayAddress: .word 0x10008000
 	black: .word 0x000000 # '0'
+	white: .word 0xffffff # 'w'
 	red: .word 0xff0000 # 'r'
 	green: .word 0x00ff00 # 'g'
 	blue: .word 0x0000ff # 'b'
@@ -39,7 +40,9 @@
 		18, 6, 8, 7, 'g', # safe top 2
 		28, 6, 8, 7, 'g', # safe top 3
 		38, 6, 8, 7, 'g', # safe top 4
-		48, 6, 8, 7, 'g' # safe top 5
+		48, 6, 8, 7, 'g', # safe top 5
+		6, 13, 52, 16, '0', # water
+		6, 35, 52, 16, '0' # water
 	frog: .byte 1, 1, 2, 2, 'f', # body
 		0, 0, 1, 1, 'f', # top left
 		3, 0, 1, 1, 'f', # top right
@@ -60,6 +63,7 @@
 		38, 6, 11, 4, 'b', # row 2 - log 3
 		6, 11, 14, 4, 'b', # row 3 - log 1
 		32, 11, 14, 4, 'b' # row 3 - log 2
+	scenePosition: .byte 0, 0
 	frogPosition: .byte 30, 52
 	roadPosition: .byte 6, 35
 	waterPosition: .byte 6, 13
@@ -70,9 +74,7 @@ main:
 	jal Clear
 	jal Scene
 	Repaint:
-		jal Frog
-		jal Vehicles
-		jal Water
+		jal FrogRoadWater
 		li $v0, 32
 		li $a0, 16
 		syscall
@@ -96,63 +98,40 @@ Scene:
 	sw $ra, 0($sp)
 	la $a0, scene
 	li $a1, 11
-	li $a2, 0
+	la $a2, scenePosition
 	jal RectArray
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
-Frog:
+FrogRoadWater:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	lb $a0, frogPosition
-	lb $a1, frogPosition + 1
-	jal GetPos
-	move $a2, $v0
 	la $a0, frog
 	li $a1, 5
+	la $a2, frogPosition
 	jal RectArray
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
-	jr $ra
-	
-Vehicles:
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
-	lb $a0, roadPosition
-	lb $a1, roadPosition + 1
-	jal GetPos
-	move $a2, $v0
 	la $a0, vehicles
 	li $a1, 8
+	la $a2, roadPosition
 	jal RectArray
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
-	jr $ra
-
-Water:
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
-	lb $a0, waterPosition
-	lb $a1, waterPosition + 1
-	jal GetPos
-	move $a2, $v0
 	la $a0, logs
-	li $a1, 8
+	li $a1, 7
+	la $a2, waterPosition
 	jal RectArray
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
 		
-RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (unit)
+RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	move $s3, $a2 # $s3 preserves origin position (unit)
 	move $s1, $a0 # $s1 is current rect of array (mem address)
 	li $s2, 5
 	mult $a1, $s2
 	mflo $s2
 	add $s2, $a0, $s2 # $s2 is end of array (mem address)
+	move $s3, $a2 # $s3 preserves origin position (mem address)
 	NextRect:
 		move $a0, $s1
 		move $a1, $s3
@@ -163,18 +142,22 @@ RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of
 	addi $sp, $sp, 4
 	jr $ra
 	
-RectFromMem: # $a0 has the memory address for the rectangle, $a1 is origin position (unit)
+RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	move $t0, $a0 # $t0 preserves the memory address
-	move $t1, $a1 # $t1 preserves origin position (unit)
+	move $t0, $a0 # $t0 preserves the rectangle (mem address)
+	move $t1, $a1 # $t1 preserves origin position (mem address)
 	lbu $a0, 4($t0)
 	jal GetColor
 	move $a3, $v0
 	lb $a0, 0($t0)
 	lb $a1, 1($t0)
 	jal GetPos
-	add $a0, $v0, $t1
+	move $t2, $v0
+	lb $a0, 0($t1)
+	lb $a1, 1($t1)
+	jal GetPos
+	add $a0, $v0, $t2
 	lb $a1, 2($t0)
 	lb $a2, 3($t0)
 	jal Rectangle
@@ -212,20 +195,24 @@ GetPos: # $a0 has x coord (unit), $a1 has y coord (unit), $v0 returns position (
 	jr $ra
 	
 GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $t registers
-	lw $v0, black
-	bne $a0, 'r', NotRed
-	lw $v0, red
-	NotRed:
-	bne $a0, 'g', NotGreen
-	lw $v0, green
-	NotGreen:
-	bne $a0, 'b', NotBlue
-	lw $v0, blue
-	NotBlue:
-	bne $a0, 'f', NotDarkGreen
-	lw $v0, darkGreen
-	NotDarkGreen:
-	jr $ra
+	lw $v0, white
+	Black:
+		bne $a0, '0', Red
+		lw $v0, red
+	Red:
+		bne $a0, 'r', Green
+		lw $v0, red
+	Green:
+		bne $a0, 'g', Blue
+		lw $v0, green
+	Blue:
+		bne $a0, 'b', DarkGreen
+		lw $v0, blue
+	DarkGreen:
+		bne $a0, 'f', ReturnColor
+		lw $v0, darkGreen
+	ReturnColor:
+		jr $ra
 	
 Exit:
 	li $v0, 10 # terminate the program gracefully
