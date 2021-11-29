@@ -23,6 +23,7 @@
 #
 #####################################################################
 .data
+	##### Display Data #####
 	displayAddress: .word 0x10008000
 	black: .word 0x000000 # '0'
 	white: .word 0xffffff # 'w'
@@ -68,19 +69,25 @@
 	roadPosition: .byte 6, 35
 	waterPosition: .byte 6, 13
 	
+	##### Input Data #####
+	inputAddress: .word 0xffff0000
+		
 .text
 main:
 	lw $s0, displayAddress # $s0 always holds displayAddress (constant) 
+	lw $s1, inputAddress
 	jal Clear
-	jal Scene
-	Repaint:
+	MainLoop:
+		jal Scene
+		jal CheckInput
 		jal FrogRoadWater
 		li $v0, 32
 		li $a0, 16
 		syscall
-		j Repaint
+		j MainLoop
 	j Exit
-	
+		
+##### Display Functions #####
 Clear:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -97,7 +104,7 @@ Scene:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	la $a0, scene
-	li $a1, 11
+	li $a1, 13
 	la $a2, scenePosition
 	jal RectArray
 	lw $ra, 0($sp)
@@ -107,10 +114,6 @@ Scene:
 FrogRoadWater:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	la $a0, frog
-	li $a1, 5
-	la $a2, frogPosition
-	jal RectArray
 	la $a0, vehicles
 	li $a1, 8
 	la $a2, roadPosition
@@ -119,6 +122,10 @@ FrogRoadWater:
 	li $a1, 7
 	la $a2, waterPosition
 	jal RectArray
+	la $a0, frog
+	li $a1, 5
+	la $a2, frogPosition
+	jal RectArray
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
@@ -126,18 +133,18 @@ FrogRoadWater:
 RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	move $s1, $a0 # $s1 is current rect of array (mem address)
-	li $s2, 5
-	mult $a1, $s2
-	mflo $s2
-	add $s2, $a0, $s2 # $s2 is end of array (mem address)
-	move $s3, $a2 # $s3 preserves origin position (mem address)
+	move $s2, $a0 # $s2 is current rect of array (mem address)
+	li $s3, 5
+	mult $a1, $s3
+	mflo $s3
+	add $s3, $a0, $s3 # $s3 is end of array (mem address)
+	move $s4, $a2 # $s4 preserves origin position (mem address)
 	NextRect:
-		move $a0, $s1
-		move $a1, $s3
+		move $a0, $s2
+		move $a1, $s4
 		jal RectFromMem
-		add $s1, $s1, 5
-	bne $s1, $s2, NextRect
+		add $s2, $s2, 5
+	bne $s2, $s3, NextRect
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
@@ -198,7 +205,7 @@ GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $t re
 	lw $v0, white
 	Black:
 		bne $a0, '0', Red
-		lw $v0, red
+		lw $v0, black
 	Red:
 		bne $a0, 'r', Green
 		lw $v0, red
@@ -212,6 +219,50 @@ GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $t re
 		bne $a0, 'f', ReturnColor
 		lw $v0, darkGreen
 	ReturnColor:
+		jr $ra
+		
+#### Input Functions #####
+CheckInput:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)	
+	lw $t0, 0($s1)
+	bne $t0, 1, ReturnCheckInput
+	lw $a0, 4($s1)
+	jal Move
+	ReturnCheckInput:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+	
+Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
+	lb $t0, frogPosition # $t0 is the x coord of frog position
+	lb $t1, frogPosition + 1 # $t1 is the y coord of frog position
+	li $v0, 1
+	beq $a0, 'w', InputW
+	beq $a0, 'W', InputW
+	beq $a0, 'a', InputA
+	beq $a0, 'A', InputA
+	beq $a0, 's', InputS
+	beq $a0, 'S', InputS
+	beq $a0, 'd', InputD
+	beq $a0, 'D', InputD
+	li $v0, 0
+	j ReturnMove
+	InputW:
+		add $t1, $t1, -6
+		j ReturnMove
+	InputA:
+		add $t0, $t0, -6
+		j ReturnMove
+	InputS:
+		add $t1, $t1, 6
+		j ReturnMove
+	InputD:
+		add $t0, $t0, 6
+		j ReturnMove
+	ReturnMove: 
+		sb $t0, frogPosition
+		sb $t1, frogPosition + 1
 		jr $ra
 	
 Exit:
