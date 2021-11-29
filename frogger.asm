@@ -31,43 +31,43 @@
 	green: .word 0x00ff00 # 'g'
 	blue: .word 0x0000ff # 'b'
 	darkGreen: .word 0x008000 # 'f' - stands for frog
-	scene: .byte 0, 0, 58, 6, 'b', # border top
-		58, 0, 6, 58, 'b', # border right
-		6, 58, 58, 6, 'b', # border bottom
-		0, 6, 6, 58, 'b', # border left
-		6, 51, 52, 7, 'g', # safe bottom
-		6, 29, 52, 6, 'g', # safe mid
-		8, 6, 8, 7, 'g', # safe top 1
-		18, 6, 8, 7, 'g', # safe top 2
-		28, 6, 8, 7, 'g', # safe top 3
-		38, 6, 8, 7, 'g', # safe top 4
-		48, 6, 8, 7, 'g', # safe top 5
-		6, 13, 52, 16, '0', # water
-		6, 35, 52, 16, '0' # water
+	scene: .byte 0, 0, 59, 5, 'b', # border top
+		59, 0, 5, 59, 'b', # border right
+		5, 59, 59, 5, 'b', # border bottom
+		0, 5, 5, 59, 'b', # border left
+		5, 53, 54, 6, 'g', # safe bottom
+		5, 29, 54, 6, 'g', # safe mid
+		5, 5, 7, 6, 'g', # safe top 1
+		16, 5, 8, 6, 'g', # safe top 2
+		28, 5, 8, 6, 'g', # safe top 3
+		40, 5, 8, 6, 'g', # safe top 4
+		52, 5, 7, 6, 'g', # safe top 5
+		5, 11, 54, 18, '0', # water
+		5, 35, 54, 18, '0' # water
 	frog: .byte 1, 1, 2, 2, 'f', # body
 		0, 0, 1, 1, 'f', # top left
 		3, 0, 1, 1, 'f', # top right
 		0, 3, 1, 1, 'f', # bottom left
 		3, 3, 1, 1, 'f' # bottom right
 	vehicles: .byte 6, 1, 6, 4, 'r', # row 1 - car 1
-		23, 1, 6, 4, 'r', # row 1 - car 2
-		41, 1, 6, 4, 'r', # row 1 - car 3
-		7, 6, 12, 4, 'r', # row 2 - car 1
-		33, 6, 12, 4, 'r', # row 2 - car 2
-		6, 11, 6, 4, 'r', # row 3 - car 1
-		23, 11, 6, 4, 'r', # row 3 - car 2
-		41, 11, 6, 4 'r' # row 3 - car 3
-	logs: .byte 6, 1, 14, 4, 'b', # row 1 - log 1
-		32, 1, 14, 4, 'b', # row 1 - log 2
-		3, 6, 11, 4, 'b', # row 2 - log 1
-		20, 6, 12, 4, 'b', # row 2 - log 2
-		38, 6, 11, 4, 'b', # row 2 - log 3
-		6, 11, 14, 4, 'b', # row 3 - log 1
-		32, 11, 14, 4, 'b' # row 3 - log 2
+		24, 1, 6, 4, 'r', # row 1 - car 2
+		42, 1, 6, 4, 'r', # row 1 - car 3
+		6, 7, 12, 4, 'r', # row 2 - car 1
+		36, 7, 12, 4, 'r', # row 2 - car 2
+		6, 13, 6, 4, 'r', # row 3 - car 1
+		24, 13, 6, 4, 'r', # row 3 - car 2
+		42, 13, 6, 4 'r' # row 3 - car 3
+	logs: .byte 6, 1, 12, 4, 'b', # row 1 - log 1
+		36, 1, 12, 4, 'b', # row 1 - log 2
+		6, 7, 6, 4, 'b', # row 2 - log 1
+		24, 7, 6, 4, 'b', # row 2 - log 2
+		42, 7, 6, 4, 'b', # row 2 - log 3
+		6, 13, 12, 4, 'b', # row 3 - log 1
+		36, 13, 12, 4, 'b' # row 3 - log 2
 	scenePosition: .byte 0, 0
-	frogPosition: .byte 30, 52
-	roadPosition: .byte 6, 35
-	waterPosition: .byte 6, 13
+	frogPosition: .byte 30, 54
+	roadPosition: .byte 5, 35
+	waterPosition: .byte 5, 11
 	
 	##### Input Data #####
 	inputAddress: .word 0xffff0000
@@ -238,6 +238,7 @@ Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 	lb $t0, frogPosition # $t0 is the x coord of frog position
 	lb $t1, frogPosition + 1 # $t1 is the y coord of frog position
 	li $v0, 1
+	ble $t1, 6, ReturnMove
 	beq $a0, 'w', InputW
 	beq $a0, 'W', InputW
 	beq $a0, 'a', InputA
@@ -252,12 +253,15 @@ Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 		add $t1, $t1, -6
 		j ReturnMove
 	InputA:
+		ble $t0, 6, ReturnMove
 		add $t0, $t0, -6
 		j ReturnMove
 	InputS:
+		bge $t1, 54, ReturnMove
 		add $t1, $t1, 6
 		j ReturnMove
 	InputD:
+		bge $t0, 54, ReturnMove
 		add $t0, $t0, 6
 		j ReturnMove
 	ReturnMove: 
