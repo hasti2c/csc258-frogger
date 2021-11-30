@@ -68,19 +68,17 @@
 	frogPosition: .byte 30, 54
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
-	completedFrogs: .byte 6, 6, 1, # safe region 1
-		18, 6, 1, # safe region 2
-		30, 6, 1, # safe region 3
-		42, 6, 1, # safe region 4
-		54, 6, 1 # safe region 5
+	completedFrogs: .byte 6, 6, 0, # safe region 1
+		18, 6, 0, # safe region 2
+		30, 6, 0, # safe region 3
+		42, 6, 0, # safe region 4
+		54, 6, 0 # safe region 5
 	
 	##### Input Data #####
 	inputAddress: .word 0xffff0000
 		
 .text
 main:
-	lw $s0, displayAddress # $s0 always holds displayAddress (constant) 
-	lw $s1, inputAddress
 	jal Clear
 	MainLoop:
 		jal CheckInput
@@ -97,22 +95,26 @@ main:
 Clear:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	
 	li $a0, 0
 	li $a1, 64
 	li $a2, 64
 	lw $a3, black
 	jal Rectangle
 	lw $ra, 0($sp)
+	
 	addi $sp, $sp, 4
 	jr $ra
 	
 Scene:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	
 	la $a0, scene
 	li $a1, 13
 	la $a2, scenePosition
 	jal RectArray
+	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
@@ -120,6 +122,7 @@ Scene:
 FrogRoadWater:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	
 	la $a0, vehicles
 	li $a1, 8
 	la $a2, roadPosition
@@ -132,6 +135,7 @@ FrogRoadWater:
 	li $a1, 5
 	la $a2, frogPosition
 	jal RectArray
+	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
@@ -139,6 +143,7 @@ FrogRoadWater:
 CompletedFrogs:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	
 	la $s5, completedFrogs # $s5 is start of completed frog array (mem address)
 	li $s6, 0 # $s6 is the number of frogs checked
 	DrawFrog:
@@ -147,17 +152,20 @@ CompletedFrogs:
 		lb $t2, 2($s5)
 		beq $t2, 0, DrawFrogIncrement
 		move $a2, $s5
-		# jal RectArray
+		jal RectArray
 		DrawFrogIncrement:
 			add $s5, $s5, 3
 			addi $s6, $s6, 1
 			bne $s6, 5, DrawFrog
+		
+	lw $ra, 0($sp)	
 	addi $sp, $sp, 4
 	jr $ra
 		
 RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	
 	move $s2, $a0 # $s2 is current rect of array (mem address)
 	li $s3, 5
 	mult $a1, $s3
@@ -170,6 +178,7 @@ RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of
 		jal RectFromMem
 		add $s2, $s2, 5
 	bne $s2, $s3, NextRect
+	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
@@ -177,6 +186,7 @@ RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of
 RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	
 	move $t0, $a0 # $t0 preserves the rectangle (mem address)
 	move $t1, $a1 # $t1 preserves origin position (mem address)
 	lbu $a0, 4($t0)
@@ -193,6 +203,7 @@ RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem addre
 	lb $a1, 2($t0)
 	lb $a2, 3($t0)
 	jal Rectangle
+	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
@@ -203,7 +214,8 @@ Rectangle: # $a0 has start position (unit), $a1 length (unit), $a2 height (unit)
 	sll $t2, $a2, 6
 	add $t2, $t2, $a0 # $t2 stores the final position of the first column (unit)
 	sll $t3, $t0, 2
-	add $t3, $t3, $s0 # $t3 stores the current memory address
+	lw $t4, displayAddress # $t4 stores displayAddress (mem address)
+	add $t3, $t3, $t4 # $t3 stores the current memory address
 	Row:
 		sw $a3, 0($t3)
 		addi $t0, $t0, 1
@@ -215,7 +227,7 @@ Rectangle: # $a0 has start position (unit), $a1 length (unit), $a2 height (unit)
 		addi $t0, $t0, 0x40
 		addi $t1, $t1, 0x40
 		sll $t3, $t0, 2
-		add $t3, $t3, $s0
+		add $t3, $t3, $t4
 		beq $t0, $t2, RectangleReturn
 		j Row
 	RectangleReturn:
@@ -249,11 +261,14 @@ GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $t re
 #### Input Functions #####
 CheckInput:
 	addi $sp, $sp, -4
-	sw $ra, 0($sp)		
-	lw $t0, 0($s1)
-	bne $t0, 1, ReturnCheckInput
-	lw $a0, 4($s1)
+	sw $ra, 0($sp)
+	
+	lw $t0, inputAddress # $t0 is inputAddress (mem address)
+	lw $t1, 0($t0) # $t1 is whether or not there has been keyboard input (0/1)
+	bne $t1, 1, ReturnCheckInput
+	lw $a0, 4($t0)
 	jal Move
+	
 	ReturnCheckInput:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
@@ -261,7 +276,8 @@ CheckInput:
 	
 Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 	addi $sp, $sp, -4
-	sw $ra, 0($sp)	
+	sw $ra, 0($sp)
+	
 	move $t0, $a0 # $t0 preserves the keyboard input
 	lb $a0, frogPosition # $a0 is the x coord of frog position
 	lb $a1, frogPosition + 1 # $a1 is the y coord of frog position
@@ -296,6 +312,7 @@ Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 		jal CheckCompletion
 		sb $v0, frogPosition
 		sb $v1, frogPosition + 1
+		
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
