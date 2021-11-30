@@ -141,46 +141,62 @@ FrogRoadWater:
 	jr $ra
 	
 CompletedFrogs:
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
+	addi $sp, $sp, -20
+	sw $ra, 16($sp)
+	sw $s0, 12($sp)
+	sw $s1, 8($sp)
+	sw $s2, 4($sp)
+	sw $s3, 0($sp)
 	
-	la $s5, completedFrogs # $s5 is start of completed frog array (mem address)
-	li $s6, 0 # $s6 is the number of frogs checked
+	la $s0, completedFrogs # $s0 is start of completed frog array (mem address)
+	li $s1, 0 # $s1 is the number of frogs checked
+	la $s2, frog # $s2 is the frog array (mem address)
+	li $s3, 5 # $s3 is the length of the frog array
 	DrawFrog:
-		la $a0, frog # TODO: use $s register
-		li $a1, 5 # TODO: use $s register
-		lb $t2, 2($s5)
+		move $a0, $s2
+		move $a1, $s3
+		lb $t2, 2($s0)
 		beq $t2, 0, DrawFrogIncrement
-		move $a2, $s5
+		move $a2, $s0
 		jal RectArray
 		DrawFrogIncrement:
-			add $s5, $s5, 3
-			addi $s6, $s6, 1
-			bne $s6, 5, DrawFrog
-		
-	lw $ra, 0($sp)	
-	addi $sp, $sp, 4
+			add $s0, $s0, 3
+			addi $s1, $s1, 1
+			bne $s1, 5, DrawFrog
+	
+	lw $s3, 0($sp)
+	lw $s2, 4($sp)
+	lw $s1, 8($sp)
+	lw $s0, 12($sp)
+	lw $ra, 16($sp)	
+	addi $sp, $sp, 20
 	jr $ra
 		
 RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (mem address)
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
+	addi $sp, $sp, -16
+	sw $ra, 12($sp)
+	sw $s0, 8($sp)
+	sw $s1, 4($sp)
+	sw $s2, 0($sp)
 	
-	move $s2, $a0 # $s2 is current rect of array (mem address)
-	li $s3, 5
-	mult $a1, $s3
-	mflo $s3
-	add $s3, $a0, $s3 # $s3 is end of array (mem address)
-	move $s4, $a2 # $s4 preserves origin position (mem address)
+	move $s0, $a0 # $s0 is current rect of array (mem address)
+	li $s1, 5
+	mult $a1, $s1
+	mflo $s1
+	add $s1, $a0, $s1 # $s1 is end of array (mem address)
+	move $s2, $a2 # $s2 preserves origin position (mem address)
 	NextRect:
-		move $a0, $s2
-		move $a1, $s4
+		move $a0, $s0
+		move $a1, $s2
 		jal RectFromMem
-		add $s2, $s2, 5
-	bne $s2, $s3, NextRect
+		add $s0, $s0, 5
+	bne $s0, $s1, NextRect
 	
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
+	lw $s2, 0($sp)
+	lw $s1, 4($sp)
+	lw $s0, 8($sp)
+	lw $ra, 12($sp)
+	addi $sp, $sp, 16
 	jr $ra
 	
 RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem address)
