@@ -68,6 +68,11 @@
 	frogPosition: .byte 30, 54
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
+	completedFrogs: .byte 6, 6, 1, # safe region 1
+		18, 6, 1, # safe region 2
+		30, 6, 1, # safe region 3
+		42, 6, 1, # safe region 4
+		54, 6, 1 # safe region 5
 	
 	##### Input Data #####
 	inputAddress: .word 0xffff0000
@@ -78,9 +83,10 @@ main:
 	lw $s1, inputAddress
 	jal Clear
 	MainLoop:
-		jal Scene
 		jal CheckInput
+		jal Scene
 		jal FrogRoadWater
+		jal CompletedFrogs
 		li $v0, 32
 		li $a0, 16
 		syscall
@@ -127,6 +133,25 @@ FrogRoadWater:
 	la $a2, frogPosition
 	jal RectArray
 	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+CompletedFrogs:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	la $s5, completedFrogs # $s5 is start of completed frog array (mem address)
+	li $s6, 0 # $s6 is the number of frogs checked
+	DrawFrog:
+		la $a0, frog # TODO: use $s register
+		li $a1, 5 # TODO: use $s register
+		lb $t2, 2($s5)
+		beq $t2, 0, DrawFrogIncrement
+		move $a2, $s5
+		# jal RectArray
+		DrawFrogIncrement:
+			add $s5, $s5, 3
+			addi $s6, $s6, 1
+			bne $s6, 5, DrawFrog
 	addi $sp, $sp, 4
 	jr $ra
 		
@@ -224,7 +249,7 @@ GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $t re
 #### Input Functions #####
 CheckInput:
 	addi $sp, $sp, -4
-	sw $ra, 0($sp)	
+	sw $ra, 0($sp)		
 	lw $t0, 0($s1)
 	bne $t0, 1, ReturnCheckInput
 	lw $a0, 4($s1)
@@ -235,38 +260,65 @@ CheckInput:
 		jr $ra
 	
 Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
-	lb $t0, frogPosition # $t0 is the x coord of frog position
-	lb $t1, frogPosition + 1 # $t1 is the y coord of frog position
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)	
+	move $t0, $a0 # $t0 preserves the keyboard input
+	lb $a0, frogPosition # $a0 is the x coord of frog position
+	lb $a1, frogPosition + 1 # $a1 is the y coord of frog position
 	li $v0, 1
-	ble $t1, 6, ReturnMove
-	beq $a0, 'w', InputW
-	beq $a0, 'W', InputW
-	beq $a0, 'a', InputA
-	beq $a0, 'A', InputA
-	beq $a0, 's', InputS
-	beq $a0, 'S', InputS
-	beq $a0, 'd', InputD
-	beq $a0, 'D', InputD
+	ble $a1, 6, ReturnMove
+	beq $t0, 'w', InputW
+	beq $t0, 'W', InputW
+	beq $t0, 'a', InputA
+	beq $t0, 'A', InputA
+	beq $t0, 's', InputS
+	beq $t0, 'S', InputS
+	beq $t0, 'd', InputD
+	beq $t0, 'D', InputD
 	li $v0, 0
 	j ReturnMove
 	InputW:
-		add $t1, $t1, -6
+		add $a1, $a1, -6
 		j ReturnMove
 	InputA:
-		ble $t0, 6, ReturnMove
-		add $t0, $t0, -6
+		ble $a0, 6, ReturnMove
+		add $a0, $a0, -6
 		j ReturnMove
 	InputS:
-		bge $t1, 54, ReturnMove
-		add $t1, $t1, 6
+		bge $a1, 54, ReturnMove
+		add $a1, $a1, 6
 		j ReturnMove
 	InputD:
-		bge $t0, 54, ReturnMove
-		add $t0, $t0, 6
+		bge $a0, 54, ReturnMove
+		add $a0, $a0, 6
 		j ReturnMove
-	ReturnMove: 
-		sb $t0, frogPosition
-		sb $t1, frogPosition + 1
+	ReturnMove:
+		jal CheckCompletion
+		sb $v0, frogPosition
+		sb $v1, frogPosition + 1
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+CheckCompletion: # $a0, $a1 are current x, y coord of frog position (unit), $v0, $v1 are result x, y coord of frog position (unit)
+	bgt $a1, 6, NotCompleted
+	la $t0, completedFrogs # $t0 is current element of completed frogs array (mem address)
+	li $t1, 0 # $t1 is the number of frogs checked
+	CheckFrog:
+		lb $t2, 0($t0)
+		bne $t2, $a0, CheckFrogIncrement
+		li $t2, 1
+		sb $t2, 2($t0)
+		CheckFrogIncrement:
+			add $t0, $t0, 3
+			addi $t1, $t1, 1
+			bne $t1, 5, CheckFrog
+		li $v0, 30
+		li $v1, 54
+		jr $ra
+	NotCompleted:
+		move $v0, $a0
+		move $v1, $a1
 		jr $ra
 	
 Exit:
