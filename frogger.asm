@@ -13,7 +13,7 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 1
+# - Milestone 2
 #
 # Which approved additional features have been implemented?
 # - ...
@@ -25,26 +25,32 @@
 .data
 	##### Milestone 1 Data #####
 	displayAddress: .word 0x10008000
-	black: .word 0x000000 # '0'
-	white: .word 0xffffff # 'w'
-	red: .word 0xff0000 # 'r'
-	green: .word 0x00ff00 # 'g'
-	blue: .word 0x0000ff # 'b'
-	lightBlue: .word 0x87ceeb # 'l' - stands for light
-	darkGreen: .word 0x008000 # 'f' - stands for frog
-	scene: .byte 0, 0, 59, 5, 'l', # border top
-		59, 0, 5, 59, 'l', # border right
-		5, 59, 59, 5, 'l', # border bottom
-		0, 5, 5, 59, 'l', # border left
+	black: .word 0x000000 # '0' - used for clear
+	white: .word 0xffffff # '1' - used for undefined values
+	red: .word 0xff0000 # 'r' - used for vehicles
+	green: .word 0x00ff00 # 'g' - used for safe areas
+	blue: .word 0x0000ff # 'b' - used for border
+	lightBlue: .word 0x00bfff # 'l' - stands for light - used for water
+	darkGreen: .word 0x008000 # 'f' - stands for frog - used for frog!
+	brown: .word 0xd2691e # 'w' - stands for wood - used for logs
+	gray: .word 0x696969 # 's' - stands for street - used for road!
+	scene: .byte 0, 0, 59, 5, 'b', # border top
+		59, 0, 5, 59, 'b', # border right
+		5, 59, 59, 5, 'b', # border bottom
+		0, 5, 5, 59, 'b', # border left
 		5, 53, 54, 6, 'g', # safe bottom
 		5, 29, 54, 6, 'g', # safe mid
 		5, 5, 7, 6, 'g', # safe top 1
+		12, 5, 4, 6, 'l', # unsafe top 1
 		16, 5, 8, 6, 'g', # safe top 2
+		24, 5, 4, 6, 'l', # unsafe top 2
 		28, 5, 8, 6, 'g', # safe top 3
+		36, 5, 4, 6, 'l', # unsafe top 3
 		40, 5, 8, 6, 'g', # safe top 4
+		48, 5, 4, 6, 'l', # unsafe top 5
 		52, 5, 7, 6, 'g', # safe top 5
-		5, 11, 54, 18, '0', # water
-		5, 35, 54, 18, '0' # water
+		5, 11, 54, 18, 'l', # water
+		5, 35, 54, 18, 's' # road
 	frog: .byte 1, 1, 2, 2, 'f', # body
 		0, 0, 1, 1, 'f', # top left
 		3, 0, 1, 1, 'f', # top right
@@ -58,13 +64,13 @@
 		6, 13, 6, 4, 'r', # row 3 - car 1
 		24, 13, 6, 4, 'r', # row 3 - car 2
 		42, 13, 6, 4 'r' # row 3 - car 3
-	logs: .byte 6, 1, 12, 4, 'b', # row 1 - log 1
-		36, 1, 12, 4, 'b', # row 1 - log 2
-		6, 7, 6, 4, 'b', # row 2 - log 1
-		24, 7, 6, 4, 'b', # row 2 - log 2
-		42, 7, 6, 4, 'b', # row 2 - log 3
-		6, 13, 12, 4, 'b', # row 3 - log 1
-		36, 13, 12, 4, 'b' # row 3 - log 2
+	logs: .byte 6, 1, 12, 4, 'w', # row 1 - log 1
+		36, 1, 12, 4, 'w', # row 1 - log 2
+		6, 7, 6, 4, 'w', # row 2 - log 1
+		24, 7, 6, 4, 'w', # row 2 - log 2
+		42, 7, 6, 4, 'w', # row 2 - log 3
+		6, 13, 12, 4, 'w', # row 3 - log 1
+		36, 13, 12, 4, 'w' # row 3 - log 2
 	
 	##### Milestone 2 Data #####
 	inputAddress: .word 0xffff0000
@@ -85,6 +91,8 @@
 		30, 6, 0, # safe region 3
 		42, 6, 0, # safe region 4
 		54, 6, 0 # safe region 5
+	disallowedColors: .byte 'b', 'f' # border & frog
+	loseColors: .byte 'r', 'l' # cars & water
 		
 .text
 main:
@@ -130,7 +138,7 @@ Scene:
 	sw $ra, 0($sp)
 	
 	la $a0, scene
-	li $a1, 13
+	li $a1, 17
 	la $a2, scenePosition
 	li $a3, 0
 	jal RectArray
@@ -281,8 +289,14 @@ GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $a an
 		bne $a0, 'l', DarkGreen
 		lw $v0, lightBlue
 	DarkGreen:
-		bne $a0, 'f', ReturnColor
+		bne $a0, 'f', Brown
 		lw $v0, darkGreen
+	Brown:
+		bne $a0, 'w', Gray
+		lw $v0, brown
+	Gray:
+		bne $a0, 's', ReturnColor
+		lw $v0, gray
 	ReturnColor:
 		jr $ra
 		
@@ -310,7 +324,6 @@ Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 	lb $a0, frogPosition # $a0 is the x coord of frog position
 	lb $a1, frogPosition + 1 # $a1 is the y coord of frog position
 	li $v0, 1
-	ble $a1, 6, ReturnMove
 	beq $t0, 'w', InputW
 	beq $t0, 'W', InputW
 	beq $t0, 'a', InputA
@@ -325,22 +338,18 @@ Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 		add $a1, $a1, -6
 		j ReturnMove
 	InputA:
-		ble $a0, 6, ReturnMove
 		add $a0, $a0, -6
 		j ReturnMove
 	InputS:
-		bge $a1, 54, ReturnMove
 		add $a1, $a1, 6
 		j ReturnMove
 	InputD:
-		bge $a0, 54, ReturnMove
 		add $a0, $a0, 6
 		j ReturnMove
 	ReturnMove:
 		jal CheckCompletion
 		sb $v0, frogPosition
 		sb $v1, frogPosition + 1
-		
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
