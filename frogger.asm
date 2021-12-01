@@ -93,6 +93,7 @@
 		54, 6, 0 # safe region 5
 	forbiddenColours: .byte 'b', 'f' # border & frog
 	loseColours: .byte 'r', 'l' # cars & water
+	lives: .byte 3
 		
 .text
 main:
@@ -101,14 +102,17 @@ main:
 	MainLoop:
 		jal CheckStandConditions
 		jal CheckInput
+		
 		jal Scene
 		jal FrogRoadWater
 		jal CompletedFrogs
+		
 		li $v0, 32
 		li $a0, 16
 		syscall
 		addi $s0, $s0, 1
 		bne $s0, 30, MainLoop
+		
 		li $s0, 0
 		jal Shift
 		j MainLoop
@@ -504,6 +508,7 @@ CheckStandConditions:
 	beqz $v0, ReturnCheckStandConditions
 	li $t0, 30
 	li $t1, 54
+	jal CountLoss
 	sb $t0, frogPosition
 	sb $t1, frogPosition + 1
 		
@@ -548,6 +553,7 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	ReturnMoveLoss:
 		li $v0, 30
 		li $v1, 54
+		jal CountLoss
 		j ReturnCheckMoveConditions
 	ReturnMoveWin:
 		move $a0, $s0
@@ -581,6 +587,12 @@ GetPositionColour: # $a0, $a1 are x, y coord (unit), $v0 returns colour of posit
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
+	
+CountLoss:
+	lb $t0, lives
+	addi $t0, $t0, -1
+	sb $t0, lives
+	beqz $t0, Exit
 	
 MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
 	la $t0, completedFrogs # $t0 is current element of completed frogs array (mem address)
