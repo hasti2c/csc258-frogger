@@ -13,10 +13,11 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 2
+# - Milestone 3 + 2 easy features
 #
 # Which approved additional features have been implemented?
-# - ...
+# - Easy Feature #5: different rows move with different speed (speed & direction is customizable by changing shiftDirection array)
+# - Easy Feature #6: 3 rows of vehicles & logs
 #
 # Any additional information that the TA needs to know:
 # - ...
@@ -78,10 +79,10 @@
 	frogPosition: .byte 30, 54
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
-	shiftDirection: .byte 1, 1, 1, # vehicles - row 1
+	shiftDirection: .byte 2, 2, 2, # vehicles - row 1
 		-1, -1, # vehicles - row 2
 		1, 1, 1, # vehicles - row 3
-		1, 1, # logs - row 1
+		2, 2, # logs - row 1
 		-1, -1, -1, # logs - row 2
 		1, 1 # logs - row 3
 	
@@ -102,6 +103,8 @@ main:
 	MainLoop:
 		jal CheckStandConditions
 		jal CheckInput
+		lb $t0, lives
+		blez $t0, Exit
 		
 		jal Scene
 		jal FrogRoadWater
@@ -508,9 +511,9 @@ CheckStandConditions:
 	beqz $v0, ReturnCheckStandConditions
 	li $t0, 30
 	li $t1, 54
-	jal CountLoss
 	sb $t0, frogPosition
 	sb $t1, frogPosition + 1
+	jal CountLoss
 		
 	ReturnCheckStandConditions:
 		lw $ra, 0($sp)
@@ -592,7 +595,6 @@ CountLoss:
 	lb $t0, lives
 	addi $t0, $t0, -1
 	sb $t0, lives
-	beqz $t0, Exit
 	
 MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
 	la $t0, completedFrogs # $t0 is current element of completed frogs array (mem address)
