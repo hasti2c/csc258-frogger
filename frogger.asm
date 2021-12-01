@@ -73,10 +73,10 @@
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
 	shiftDirection: .byte 1, 1, 1, # vehicles - row 1
-		1, 1, # vehicles - row 2
+		-1, -1, # vehicles - row 2
 		1, 1, 1, # vehicles - row 3
 		1, 1, # logs - row 1
-		1, 1, 1, # logs - row 2
+		-1, -1, -1, # logs - row 2
 		1, 1 # logs - row 3
 	
 	##### Milestone 3 Data #####
@@ -350,20 +350,26 @@ Shift:
 	li $t1, 0 # $t1 is the number of vehicles/logs we've shifted
 	la $t2, shiftDirection # $t2 is current shiftDirection (mem address)
 	ShiftElement:
-		lb $t3, 0($t0)
 		lb $t4, 0($t2)
 		li $t5, 6
 		mult $t4, $t5
-		mflo $t4
-		add $t3, $t3, $t4
-		blt $t3, 54, ShiftDone
-		sub $t3, $t3, 54 # $t3 is the new x value of the element (unit)
+		mflo $t4 # $t4 is the amount to shift (unit)
+		lb $t3, 0($t0)
+		add $t3, $t3, $t4 # $t3 is the new x value of the element (unit)
+		bge $t3, 54, RightShiftOverflow
+		blt $t3, 0, LeftShiftOverflow
+		j ShiftDone
+		RightShiftOverflow:
+		add $t3, $t3, -54
+		j ShiftDone
+		LeftShiftOverflow:
+		add $t3, $t3, 54
 		ShiftDone:
-			sb $t3, 0($t0)
-			add $t0, $t0, 5
-			add $t1, $t1, 1
-			add $t2, $t2, 1
-			bne $t1, 15, ShiftElement
+		sb $t3, 0($t0)
+		add $t0, $t0, 5
+		add $t1, $t1, 1
+		add $t2, $t2, 1
+		bne $t1, 15, ShiftElement
 	jr $ra
 	
 RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has color	
@@ -373,14 +379,17 @@ RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of
 	sw $s0, 4($sp)
 	sw $s1, 0($sp)
 	
-	move $s0, $t0 # $s0 is color
-	add $s1, $a0, $a2 # $s1 is final x-coord of rectangle (unit)
-	bgt $s1, 59, Overflow
-	addi $sp, $sp, -4
-	sw $s0, 0($sp)
-	jal Rectangle
-	j ReturnRectangleWrapped
-	Overflow:
+	bge $a0, 5, CheckRightWrap
+	addi $a0, $a0, 59
+	CheckRightWrap:
+		move $s0, $t0 # $s0 is color
+		add $s1, $a0, $a2 # $s1 is final x-coord of rectangle (unit)
+		bgt $s1, 59, RightWrap
+		addi $sp, $sp, -4
+		sw $s0, 0($sp)
+		jal Rectangle
+		j ReturnRectangleWrapped
+	RightWrap:
 		li $t0, 59
 		sub $a2, $t0, $a0
 		addi $sp, $sp, -4
@@ -391,6 +400,7 @@ RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of
 		addi $sp, $sp, -4
 		sw $s0, 0($sp)
 		jal Rectangle
+		j ReturnRectangleWrapped	
 	ReturnRectangleWrapped:
 		lw $s1, 0($sp)
 		lw $s0, 4($sp)
