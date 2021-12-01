@@ -30,11 +30,12 @@
 	red: .word 0xff0000 # 'r'
 	green: .word 0x00ff00 # 'g'
 	blue: .word 0x0000ff # 'b'
+	lightBlue: .word 0x87ceeb # 'l' - stands for light
 	darkGreen: .word 0x008000 # 'f' - stands for frog
-	scene: .byte 0, 0, 59, 5, 'b', # border top
-		59, 0, 5, 59, 'b', # border right
-		5, 59, 59, 5, 'b', # border bottom
-		0, 5, 5, 59, 'b', # border left
+	scene: .byte 0, 0, 59, 5, 'l', # border top
+		59, 0, 5, 59, 'l', # border right
+		5, 59, 59, 5, 'l', # border bottom
+		0, 5, 5, 59, 'l', # border left
 		5, 53, 54, 6, 'g', # safe bottom
 		5, 29, 54, 6, 'g', # safe mid
 		5, 5, 7, 6, 'g', # safe top 1
@@ -71,6 +72,12 @@
 	frogPosition: .byte 30, 54
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
+	shiftDirection: .byte 1, 1, 1, # vehicles - row 1
+		1, 1, # vehicles - row 2
+		1, 1, 1, # vehicles - row 3
+		1, 1, # logs - row 1
+		1, 1, 1, # logs - row 2
+		1, 1 # logs - row 3
 	
 	##### Milestone 3 Data #####
 	completedFrogs: .byte 6, 6, 0, # safe region 1
@@ -94,7 +101,7 @@ main:
 		addi $s0, $s0, 1
 		bne $s0, 30, MainLoop
 		li $s0, 0
-		jal MoveVehicles
+		jal Shift
 		j MainLoop
 	j Exit
 		
@@ -113,8 +120,8 @@ Clear:
 	sw $t0, 0($sp)
 	
 	jal Rectangle
-	lw $ra, 0($sp)
 	
+	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
@@ -125,6 +132,7 @@ Scene:
 	la $a0, scene
 	li $a1, 13
 	la $a2, scenePosition
+	li $a3, 0
 	jal RectArray
 	
 	lw $ra, 0($sp)
@@ -138,26 +146,30 @@ FrogRoadWater:
 	la $a0, vehicles
 	li $a1, 8
 	la $a2, roadPosition
+	li $a3, 1
 	jal RectArray
 	la $a0, logs
 	li $a1, 7
 	la $a2, waterPosition
+	li $a3, 1
 	jal RectArray
 	la $a0, frog
 	li $a1, 5
 	la $a2, frogPosition
+	li $a3, 0
 	jal RectArray
 	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
-RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (mem address)
-	addi $sp, $sp, -16
-	sw $ra, 12($sp)
-	sw $s0, 8($sp)
-	sw $s1, 4($sp)
-	sw $s2, 0($sp)
+RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (mem address), $a3 is whether or not to use wrapping behaviour (0/1)
+	addi $sp, $sp, -20
+	sw $ra, 16($sp)
+	sw $s0, 12($sp)
+	sw $s1, 8($sp)
+	sw $s2, 4($sp)
+	sw $s3, 0($sp)
 	
 	move $s0, $a0 # $s0 is current rect of array (mem address)
 	li $s1, 5
@@ -165,26 +177,31 @@ RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of
 	mflo $s1
 	add $s1, $a0, $s1 # $s1 is end of array (mem address)
 	move $s2, $a2 # $s2 preserves origin position (mem address)
+	move $s3, $a3 # $s3 preserves whether or not to use wrapping behaviour (0/1)
 	NextRect:
 		move $a0, $s0
 		move $a1, $s2
+		move $a2, $s3
 		jal RectFromMem
 		add $s0, $s0, 5
 	bne $s0, $s1, NextRect
 	
-	lw $s2, 0($sp)
-	lw $s1, 4($sp)
-	lw $s0, 8($sp)
-	lw $ra, 12($sp)
-	addi $sp, $sp, 16
+	lw $s3, 0($sp)
+	lw $s2, 4($sp)
+	lw $s1, 8($sp)
+	lw $s0, 12($sp)
+	lw $ra, 16($sp)
+	addi $sp, $sp, 20
 	jr $ra
 	
-RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem address)
+RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem address), $a2 is whether or not to use wrapping behaviour (0/1)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
 	move $t0, $a0 # $t0 preserves the rectangle (mem address)
 	move $t1, $a1 # $t1 preserves origin position (mem address)
+	move $t2, $a2 # $t2 preserves whether or not to use wrapping behaviour (0/1)
+	
 	
 	lbu $a0, 4($t0)
 	jal GetColor
@@ -193,19 +210,23 @@ RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem addre
 	
 	lb $a0, 0($t0)
 	lb $a1, 1($t0)
-	lb $t2, 0($t1)
-	add $a0, $a0, $t2
-	lb $t2, 1($t1)
-	add $a1, $a1, $t2
+	lb $t3, 0($t1)
+	add $a0, $a0, $t3
+	lb $t3, 1($t1)
+	add $a1, $a1, $t3
 	lb $a2, 2($t0)
 	lb $a3, 3($t0)
+	bnez $t2, RectWrappedFromMem
 	jal Rectangle
+	j ReturnRectFromMem
+	RectWrappedFromMem:
+		jal RectangleWrapped
+	ReturnRectFromMem:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
 	
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
-	jr $ra
-	
-Rectangle: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has color
+Rectangle: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has color - doesn't change $a registers
 	lw $t5, 0($sp) # $t5 stores color
 	sw $ra, 0($sp)
 	
@@ -233,9 +254,9 @@ Rectangle: # $a0 has x-coord of start position (unit), $a1 has y-coord of start 
 		j Row
 		
 	RectangleReturn:
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
-	jr $ra
+		lw $ra, 0($sp)	
+		addi $sp, $sp, 4
+		jr $ra
 	
 GetPos: # $a0 has x coord (unit), $a1 has y coord (unit), $v0 returns position (unit) - preserves $a and $t registers
 	sll $v0, $a1, 6
@@ -254,8 +275,11 @@ GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $a an
 		bne $a0, 'g', Blue
 		lw $v0, green
 	Blue:
-		bne $a0, 'b', DarkGreen
+		bne $a0, 'b', LightBlue
 		lw $v0, blue
+	LightBlue:
+		bne $a0, 'l', DarkGreen
+		lw $v0, lightBlue
 	DarkGreen:
 		bne $a0, 'f', ReturnColor
 		lw $v0, darkGreen
@@ -271,14 +295,14 @@ CheckInput:
 	lw $t1, 0($t0) # $t1 is whether or not there has been keyboard input (0/1)
 	bne $t1, 1, ReturnCheckInput
 	lw $a0, 4($t0)
-	jal MoveFrog
+	jal Move
 	
 	ReturnCheckInput:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
 	
-MoveFrog: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
+Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
@@ -321,12 +345,58 @@ MoveFrog: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 		addi $sp, $sp, 4
 		jr $ra
 		
-MoveVehicles:
-	lb $t0, roadPosition # $t0 is the x coord of roadPosition (unit)
-	addi $t0, $t0, 6
-	sb $t0, roadPosition
+Shift:
+	la $t0, vehicles # $t0 is the address of current vehicle/log (mem address)
+	li $t1, 0 # $t1 is the number of vehicles/logs we've shifted
+	la $t2, shiftDirection # $t2 is current shiftDirection (mem address)
+	ShiftElement:
+		lb $t3, 0($t0)
+		lb $t4, 0($t2)
+		li $t5, 6
+		mult $t4, $t5
+		mflo $t4
+		add $t3, $t3, $t4
+		blt $t3, 54, ShiftDone
+		sub $t3, $t3, 54 # $t3 is the new x value of the element (unit)
+		ShiftDone:
+			sb $t3, 0($t0)
+			add $t0, $t0, 5
+			add $t1, $t1, 1
+			add $t2, $t2, 1
+			bne $t1, 15, ShiftElement
 	jr $ra
 	
+RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has color	
+	lw $t0, 0($sp)
+	addi $sp, $sp, -8
+	sw $ra, 8($sp)
+	sw $s0, 4($sp)
+	sw $s1, 0($sp)
+	
+	move $s0, $t0 # $s0 is color
+	add $s1, $a0, $a2 # $s1 is final x-coord of rectangle (unit)
+	bgt $s1, 59, Overflow
+	addi $sp, $sp, -4
+	sw $s0, 0($sp)
+	jal Rectangle
+	j ReturnRectangleWrapped
+	Overflow:
+		li $t0, 59
+		sub $a2, $t0, $a0
+		addi $sp, $sp, -4
+		sw $s0, 0($sp)
+		jal Rectangle
+		li $a0, 5
+		sub $a2, $s1, 59
+		addi $sp, $sp, -4
+		sw $s0, 0($sp)
+		jal Rectangle
+	ReturnRectangleWrapped:
+		lw $s1, 0($sp)
+		lw $s0, 4($sp)
+		lw $ra, 8($sp)
+		addi $sp, $sp, 12
+		jr $ra
 	
 ##### Milestone 3 Functions #####
 CompletedFrogs:
