@@ -500,11 +500,15 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	jal GetDestinationColour
 	move $s2, $v0 # $s2 is the color of intended frog position (char)
 	
-	move $a0, $s2
-	jal CheckForbidden
+	la $a0, forbiddenColours
+	li $a1, 2
+	move $a2, $s2
+	jal Contains
 	bnez $v0, ReturnMoveForbidden
-	move $a0, $s2
-	jal CheckLoss
+	la $a0, loseColours
+	li $a1, 2
+	move $a2, $s2
+	jal Contains
 	bnez $v0, ReturnMoveLoss
 	j ReturnMoveApproved
 	
@@ -547,50 +551,6 @@ GetDestinationColour: # $a0, $a1 are intended x, y coord of frog position (unit)
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
-	
-CheckForbidden: # $a0 is colour of intended frog position (char), $v0 returns whether or not it is forbidden (0/1)
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
-	
-	la $t0, forbiddenColours # $t0 is current element of forbiddenColours array (mem address)
-	li $t1, 2 # $t1 is length of forbiddenColours array (mem address)
-	li $t2, 0 # $t2 is number of elements checked
-	li $v0, 0
-	NextForbiddenColour:
-		lb $t3, 0($t0)
-		beq $a0, $t3, ReturnForbiddenTrue
-		addi $t0, $t0, 1
-		addi $t2, $t2, 1
-		bne $t2, $t1, NextForbiddenColour
-		j ReturnForbidden
-	ReturnForbiddenTrue:
-		li $v0, 1
-	ReturnForbidden:
-		lw $ra, 0($sp)
-		addi $sp, $sp, 4
-		jr $ra
-		
-CheckLoss: # $a0 is colour of intended frog position (char), $v0 returns whether or not frog will lose (0/1)
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
-	
-	la $t0, loseColours # $t0 is current element of forbiddenColours array (mem address)
-	li $t1, 2 # $t1 is length of forbiddenColours array (mem address)
-	li $t2, 0 # $t2 is number of elements checked
-	li $v0, 0
-	NextLoseColour:
-		lb $t3, 0($t0)
-		beq $a0, $t3, ReturnLossTrue
-		addi $t0, $t0, 1
-		addi $t2, $t2, 1
-		bne $t2, $t1, NextLoseColour
-		j ReturnForbidden
-	ReturnLossTrue:
-		li $v0, 1
-	ReturnLoss:
-		lw $ra, 0($sp)
-		addi $sp, $sp, 4
-		jr $ra
 		
 CheckCompletion: # $a0, $a1 are intended x, y coord of frog position (unit), $v0, $v1 return result x, y coord of frog position (unit)
 	bgt $a1, 6, NotCompleted
@@ -612,6 +572,22 @@ CheckCompletion: # $a0, $a1 are intended x, y coord of frog position (unit), $v0
 		move $v0, $a0
 		move $v1, $a1
 		jr $ra	
+		
+##### Array Utility Functions #####
+Contains: # $a0 is beginning of array (mem address), $a1 is length of array, $a2 is element to find, $v0 returns whether or not $a2 is in array (0/1)
+	li $t0, 0 # $t0 is number of elements checked
+	li $v0, 0
+	NextElement:
+		lb $t1, 0($a0) # $t1 is the current array value
+		beq $a2, $t1, ReturnContainsTrue
+		addi $a0, $a0, 1
+		addi $t0, $t0, 1
+		bne $t0, $a1, NextElement
+		j ReturnContains
+	ReturnContainsTrue:
+		li $v0, 1
+	ReturnContains:
+		jr $ra
 	
 Exit:
 	li $v0, 10 # terminate the program gracefully
