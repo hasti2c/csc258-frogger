@@ -99,6 +99,7 @@ main:
 	li $s0, 0 # $s0 is the number of times MainLoop has been run
 	jal Clear
 	MainLoop:
+		jal CheckStandConditions
 		jal CheckInput
 		jal Scene
 		jal FrogRoadWater
@@ -488,6 +489,29 @@ CompletedFrogs:
 	addi $sp, $sp, 20
 	jr $ra
 		
+CheckStandConditions:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lb $a0, frogPosition
+	lb $a1, frogPosition + 1
+	addi $a1, $a1, 1
+	jal GetPositionColour
+	move $a2, $v0
+	la $a0, loseColours
+	li $a1, 2
+	jal Contains
+	beqz $v0, ReturnCheckStandConditions
+	li $t0, 30
+	li $t1, 54
+	sb $t0, frogPosition
+	sb $t1, frogPosition + 1
+		
+	ReturnCheckStandConditions:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
 CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (unit) - $v0, $v1 are result x, y coord of frog position (unit)
 	addi $sp, $sp, -16
 	sw $ra, 12($sp)
@@ -497,7 +521,9 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	
 	move $s0, $a0 # $s0 is the intended x-coord of frog position (unit)
 	move $s1, $a1 # $s1 is the intended y-coord of frog position (unit)
-	jal GetDestinationColour
+	addi $a0, $a0, 1
+	addi $a1, $a1, 1
+	jal GetPositionColour
 	move $s2, $v0 # $s2 is the color of intended frog position (char)
 	
 	la $a0, forbiddenColours
@@ -505,22 +531,28 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	move $a2, $s2
 	jal Contains
 	bnez $v0, ReturnMoveForbidden
+	
 	la $a0, loseColours
 	li $a1, 2
 	move $a2, $s2
 	jal Contains
 	bnez $v0, ReturnMoveLoss
-	j ReturnMoveApproved
 	
-	# move $a0, $s0
-	# move $a1, $s1
-	# jal CheckCompletion
+	ble $s1, 6, ReturnMoveWin
+	j ReturnMoveApproved
 	
 	ReturnMoveForbidden:
 		lb $v0, frogPosition
 		lb $v1, frogPosition + 1
-		j ReturnCheckMoveConditions
+		j ReturnCheckMoveConditions	
 	ReturnMoveLoss:
+		li $v0, 30
+		li $v1, 54
+		j ReturnCheckMoveConditions
+	ReturnMoveWin:
+		move $a0, $s0
+		move $a1, $s1
+		jal MarkWin
 		li $v0, 30
 		li $v1, 54
 		j ReturnCheckMoveConditions
@@ -535,12 +567,10 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 		addi $sp, $sp, 16
 		jr $ra
 	
-GetDestinationColour: # $a0, $a1 are intended x, y coord of frog position (unit), $v0 returns colour of the destination
+GetPositionColour: # $a0, $a1 are x, y coord (unit), $v0 returns colour of position (char)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
-	addi $a0, $a0, 1
-	addi $a1, $a1, 1
 	jal GetPos
 	lw $t0, displayAddress # $t0 is displayAddress (mem address)
 	sll $v0, $v0, 2
@@ -551,29 +581,69 @@ GetDestinationColour: # $a0, $a1 are intended x, y coord of frog position (unit)
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
-		
-CheckCompletion: # $a0, $a1 are intended x, y coord of frog position (unit), $v0, $v1 return result x, y coord of frog position (unit)
-	bgt $a1, 6, NotCompleted
+	
+MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
 	la $t0, completedFrogs # $t0 is current element of completed frogs array (mem address)
 	li $t1, 0 # $t1 is the number of frogs checked
-	CheckFrog:
+	NextFrog:
 		lb $t2, 0($t0)
-		bne $t2, $a0, CheckFrogIncrement
+		bne $t2, $a0, NextFrogIncrement
 		li $t2, 1
 		sb $t2, 2($t0)
-		CheckFrogIncrement:
+		NextFrogIncrement:
 			add $t0, $t0, 3
 			addi $t1, $t1, 1
-			bne $t1, 5, CheckFrog
-		li $v0, 30
-		li $v1, 54
-		jr $ra
-	NotCompleted:
-		move $v0, $a0
-		move $v1, $a1
-		jr $ra	
+			bne $t1, 5, NextFrog
+	jr $ra
 		
-##### Array Utility Functions #####
+##### Utility Functions #####
+PrintInt: # $a0 is int to print - all registers are preserved
+	addi $sp, $sp, -8
+	sw $a0, 4($sp)
+	sw $v0, 0($sp)
+	
+	li $v0, 1
+	syscall
+	li $v0, 11
+	li $a0, 0x20
+	syscall
+	
+	lw $v0, 0($sp)
+	lw $a0, 4($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+PrintChar: # $a0 is char to print - all registers are preserved
+	addi $sp, $sp, -8
+	sw $a0, 4($sp)
+	sw $v0, 0($sp)
+	
+	li $v0, 11
+	syscall
+	li $v0, 11
+	li $a0, 0x20
+	syscall
+	
+	lw $v0, 0($sp)
+	lw $a0, 4($sp)
+	addi $sp, $sp, 8
+	jr $ra
+
+NextLine: # all registers are preserved
+	addi $sp, $sp, -8
+	sw $a0, 4($sp)
+	sw $v0, 0($sp)
+	
+	li $v0, 11
+	li $a0, 0xa
+	syscall
+	
+	lw $v0, 0($sp)
+	lw $a0, 4($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+
 Contains: # $a0 is beginning of array (mem address), $a1 is length of array, $a2 is element to find, $v0 returns whether or not $a2 is in array (0/1)
 	li $t0, 0 # $t0 is number of elements checked
 	li $v0, 0
