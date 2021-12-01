@@ -91,8 +91,8 @@
 		30, 6, 0, # safe region 3
 		42, 6, 0, # safe region 4
 		54, 6, 0 # safe region 5
-	disallowedColors: .byte 'b', 'f' # border & frog
-	loseColors: .byte 'r', 'l' # cars & water
+	forbiddenColours: .byte 'b', 'f' # border & frog
+	loseColours: .byte 'r', 'l' # cars & water
 		
 .text
 main:
@@ -212,7 +212,7 @@ RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem addre
 	
 	
 	lbu $a0, 4($t0)
-	jal GetColor
+	jal GetColourCode
 	addi $sp, $sp, -4
 	sw $v0, 0($sp)
 	
@@ -234,8 +234,8 @@ RectFromMem: # $a0 is rectangle (mem address), $a1 is origin position (mem addre
 		addi $sp, $sp, 4
 		jr $ra
 	
-Rectangle: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has color - doesn't change $a registers
-	lw $t5, 0($sp) # $t5 stores color
+Rectangle: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has colour code (rgb) - doesn't change $a registers
+	lw $t5, 0($sp) # $t5 stores colour
 	sw $ra, 0($sp)
 	
 	jal GetPos
@@ -271,33 +271,70 @@ GetPos: # $a0 has x coord (unit), $a1 has y coord (unit), $v0 returns position (
 	add $v0, $v0, $a0
 	jr $ra
 	
-GetColor: # $a0 has color name (char), $v0 returns color (rgb) - preserves $a and $t registers
+GetColourCode: # $a0 has colour name (char), $v0 returns colour code (rgb) - preserves $a and $t registers
 	lw $v0, white
-	Black:
-		bne $a0, '0', Red
+	BlackCode:
+		bne $a0, '0', RedCode
 		lw $v0, black
-	Red:
-		bne $a0, 'r', Green
+	RedCode:
+		bne $a0, 'r', GreenCode
 		lw $v0, red
-	Green:
-		bne $a0, 'g', Blue
+	GreenCode:
+		bne $a0, 'g', BlueCode
 		lw $v0, green
-	Blue:
-		bne $a0, 'b', LightBlue
+	BlueCode:
+		bne $a0, 'b', LightBlueCode
 		lw $v0, blue
-	LightBlue:
-		bne $a0, 'l', DarkGreen
+	LightBlueCode:
+		bne $a0, 'l', DarkGreenCode
 		lw $v0, lightBlue
-	DarkGreen:
-		bne $a0, 'f', Brown
+	DarkGreenCode:
+		bne $a0, 'f', BrownCode
 		lw $v0, darkGreen
-	Brown:
-		bne $a0, 'w', Gray
+	BrownCode:
+		bne $a0, 'w', GrayCode
 		lw $v0, brown
-	Gray:
-		bne $a0, 's', ReturnColor
+	GrayCode:
+		bne $a0, 's', ReturnColourCode
 		lw $v0, gray
-	ReturnColor:
+	ReturnColourCode:
+		jr $ra
+		
+GetColourName: # $a0 has colour code (rgb), $v0 returns colour name (char)
+	li $v0, '1'
+	BlackName:
+		lw $t0, black
+		bne $a0, $t0, RedName
+		li $v0, '0'
+	RedName:
+		lw $t0, red
+		bne $a0, $t0, GreenName
+		li $v0, 'r'
+	GreenName:
+		lw $t0, green
+		bne $a0, $t0, BlueName
+		li $v0, 'g'
+	BlueName:
+		lw $t0, blue
+		bne $a0, $t0, LightBlueName
+		li $v0, 'b'
+	LightBlueName:
+		lw $t0, lightBlue
+		bne $a0, $t0, DarkGreenName
+		li $v0, 'l'
+	DarkGreenName:
+		lw $t0, darkGreen
+		bne $a0, $t0, BrownName
+		li $v0, 'f'
+	BrownName:
+		lw $t0, brown
+		bne $a0, $t0, GrayName
+		li $v0, 'w'
+	GrayName:
+		lw $t0, gray
+		bne $a0, $t0, ReturnColourName
+		li $v0, 's'
+	ReturnColourName:
 		jr $ra
 		
 #### Milestone 2 Functions #####
@@ -347,9 +384,10 @@ Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
 		add $a0, $a0, 6
 		j ReturnMove
 	ReturnMove:
-		jal CheckCompletion
+		jal CheckMoveConditions
 		sb $v0, frogPosition
 		sb $v1, frogPosition + 1
+		
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
@@ -381,7 +419,7 @@ Shift:
 		bne $t1, 15, ShiftElement
 	jr $ra
 	
-RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has color	
+RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has colour	
 	lw $t0, 0($sp)
 	addi $sp, $sp, -8
 	sw $ra, 8($sp)
@@ -391,7 +429,7 @@ RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of
 	bge $a0, 5, CheckRightWrap
 	addi $a0, $a0, 59
 	CheckRightWrap:
-		move $s0, $t0 # $s0 is color
+		move $s0, $t0 # $s0 is colour
 		add $s1, $a0, $a2 # $s1 is final x-coord of rectangle (unit)
 		bgt $s1, 59, RightWrap
 		addi $sp, $sp, -4
@@ -450,7 +488,111 @@ CompletedFrogs:
 	addi $sp, $sp, 20
 	jr $ra
 		
-CheckCompletion: # $a0, $a1 are current x, y coord of frog position (unit), $v0, $v1 are result x, y coord of frog position (unit)
+CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (unit) - $v0, $v1 are result x, y coord of frog position (unit)
+	addi $sp, $sp, -16
+	sw $ra, 12($sp)
+	sw $s0, 8($sp)
+	sw $s1, 4($sp)
+	sw $s2, 0($sp)
+	
+	move $s0, $a0 # $s0 is the intended x-coord of frog position (unit)
+	move $s1, $a1 # $s1 is the intended y-coord of frog position (unit)
+	jal GetDestinationColour
+	move $s2, $v0 # $s2 is the color of intended frog position (char)
+	
+	move $a0, $s2
+	jal CheckForbidden
+	bnez $v0, ReturnMoveForbidden
+	move $a0, $s2
+	jal CheckLoss
+	bnez $v0, ReturnMoveLoss
+	j ReturnMoveApproved
+	
+	# move $a0, $s0
+	# move $a1, $s1
+	# jal CheckCompletion
+	
+	ReturnMoveForbidden:
+		lb $v0, frogPosition
+		lb $v1, frogPosition + 1
+		j ReturnCheckMoveConditions
+	ReturnMoveLoss:
+		li $v0, 30
+		li $v1, 54
+		j ReturnCheckMoveConditions
+	ReturnMoveApproved:
+		move $v0, $s0
+		move $v1, $s1
+	ReturnCheckMoveConditions:
+		lw $s2, 0($sp)
+		lw $s1, 4($sp)
+		lw $s0, 8($sp)
+		lw $ra, 12($sp)	
+		addi $sp, $sp, 16
+		jr $ra
+	
+GetDestinationColour: # $a0, $a1 are intended x, y coord of frog position (unit), $v0 returns colour of the destination
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	addi $a0, $a0, 1
+	addi $a1, $a1, 1
+	jal GetPos
+	lw $t0, displayAddress # $t0 is displayAddress (mem address)
+	sll $v0, $v0, 2
+	add $t0, $t0, $v0
+	lw $a0, 0($t0)
+	jal GetColourName
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+CheckForbidden: # $a0 is colour of intended frog position (char), $v0 returns whether or not it is forbidden (0/1)
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	la $t0, forbiddenColours # $t0 is current element of forbiddenColours array (mem address)
+	li $t1, 2 # $t1 is length of forbiddenColours array (mem address)
+	li $t2, 0 # $t2 is number of elements checked
+	li $v0, 0
+	NextForbiddenColour:
+		lb $t3, 0($t0)
+		beq $a0, $t3, ReturnForbiddenTrue
+		addi $t0, $t0, 1
+		addi $t2, $t2, 1
+		bne $t2, $t1, NextForbiddenColour
+		j ReturnForbidden
+	ReturnForbiddenTrue:
+		li $v0, 1
+	ReturnForbidden:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+CheckLoss: # $a0 is colour of intended frog position (char), $v0 returns whether or not frog will lose (0/1)
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	la $t0, loseColours # $t0 is current element of forbiddenColours array (mem address)
+	li $t1, 2 # $t1 is length of forbiddenColours array (mem address)
+	li $t2, 0 # $t2 is number of elements checked
+	li $v0, 0
+	NextLoseColour:
+		lb $t3, 0($t0)
+		beq $a0, $t3, ReturnLossTrue
+		addi $t0, $t0, 1
+		addi $t2, $t2, 1
+		bne $t2, $t1, NextLoseColour
+		j ReturnForbidden
+	ReturnLossTrue:
+		li $v0, 1
+	ReturnLoss:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+CheckCompletion: # $a0, $a1 are intended x, y coord of frog position (unit), $v0, $v1 return result x, y coord of frog position (unit)
 	bgt $a1, 6, NotCompleted
 	la $t0, completedFrogs # $t0 is current element of completed frogs array (mem address)
 	li $t1, 0 # $t1 is the number of frogs checked
