@@ -26,6 +26,7 @@
 .data
 	##### Milestone 1 Data #####
 	displayAddress: .word 0x10008000
+	displayBuffer: .space 0x4000
 	black: .word 0x000000 # '0' - used for clear
 	white: .word 0xffffff # '1' - used for undefined values
 	red: .word 0xff0000 # 'r' - used for vehicles
@@ -106,9 +107,7 @@ main:
 		lb $t0, lives
 		blez $t0, Exit
 		
-		jal Scene
-		jal FrogRoadWater
-		jal CompletedFrogs
+		jal Draw
 		
 		li $v0, 32
 		li $a0, 16
@@ -122,6 +121,19 @@ main:
 	j Exit
 		
 ##### Milestone 1 Functions #####
+Draw:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	jal Scene
+	jal FrogRoadWater
+	jal CompletedFrogs
+	jal FlushBuffer
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
 Clear:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -251,7 +263,7 @@ Rectangle: # $a0 has x-coord of start position (unit), $a1 has y-coord of start 
 	add $t1, $t0, $a2 # $t1 stores the final position in the current row (unit)
 	sll $t2, $a3, 6
 	add $t2, $t2, $t0 # $t2 stores the final position of the first column (unit)
-	lw $t4, displayAddress # $t4 stores displayAddress (mem address)
+	la $t4, displayBuffer # $t4 stores displayBuffer (mem address)
 	sll $t3, $t0, 2
 	add $t3, $t3, $t4 # $t3 stores the current memory address
 	Row:
@@ -344,6 +356,26 @@ GetColourName: # $a0 has colour code (rgb), $v0 returns colour name (char)
 		li $v0, 's'
 	ReturnColourName:
 		jr $ra
+		
+FlushBuffer:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	la $t0, displayBuffer # $t0 is current element displayBuffer (mem address)
+	lw $t1, displayAddress # $t1 is current element in display (mem address)
+	li $t2, 0x1000 # $t2 is the length of display
+	li $t3, 0 # $t3 is index of current element in display
+	FlushPixel:
+		lw $t4, 0($t0)
+		sw $t4, 0($t1)
+		addi $t0, $t0, 4
+		addi $t1, $t1, 4
+		addi $t3, $t3, 1
+		bne $t3, $t2, FlushPixel
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
 		
 #### Milestone 2 Functions #####
 CheckInput:
