@@ -79,6 +79,7 @@
 	##### Milestone 2 Data #####
 	inputAddress: .word 0xffff0000
 	scenePosition: .byte 0, 0
+	initFrogPosition: .byte 30, 54
 	frogPosition: .byte 30, 54
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
@@ -105,6 +106,13 @@
 	lives: .byte 3
 	gameTime: .byte 0
 	score: .half 0
+	
+	##### Milestone 5 Data #####
+	multiPlayer: .byte 1
+	initFrogPositionMulti: .byte 18, 54,
+		42, 54
+	frogPositionMulti: .byte 18, 54,
+		42, 54
 		
 .text
 main:
@@ -123,7 +131,7 @@ LoopInit:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
-	jal CheckStandConditions
+	jal CheckAllStandConditions
 	jal CheckInput
 	lb $t0, lives
 	blez $t0, Exit
@@ -223,15 +231,12 @@ FrogRoadWater:
 	la $a2, waterPosition
 	li $a3, 1
 	jal RectArray
-	la $a0, frog
-	li $a1, 5
-	la $a2, frogPosition
-	li $a3, 0
-	jal RectArray
+	jal DrawFrog
 	
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
-	jr $ra
+	ReturnFrogRoadWater:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
 	
 RectArray: # $a0 is start of array (mem address), $a1 is length of array (num of rects), $a2 is origin position (mem address), $a3 is whether or not to use wrapping behaviour (0/1)
 	addi $sp, $sp, -20
@@ -428,50 +433,106 @@ CheckInput:
 	lw $t1, 0($t0) # $t1 is whether or not there has been keyboard input (0/1)
 	bne $t1, 1, ReturnCheckInput
 	lw $a0, 4($t0)
-	jal Move
+	jal CheckMoveInput
 	
 	ReturnCheckInput:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
-	
-Move: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1)
+		
+InputWASD: # $a0 is keyboard input, $v0 is whether or not input was wasd (0/1), $v1 is simplified input (w/a/s/d)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
-	move $t0, $a0 # $t0 preserves the keyboard input
-	lb $a0, frogPosition # $a0 is the x coord of frog position
-	lb $a1, frogPosition + 1 # $a1 is the y coord of frog position
 	li $v0, 1
-	beq $t0, 'w', InputW
-	beq $t0, 'W', InputW
-	beq $t0, 'a', InputA
-	beq $t0, 'A', InputA
-	beq $t0, 's', InputS
-	beq $t0, 'S', InputS
-	beq $t0, 'd', InputD
-	beq $t0, 'D', InputD
+	beq $a0, 'w', InputLowerWASD
+	beq $a0, 'W', InputUpperWASD
+	beq $a0, 'a', InputLowerWASD
+	beq $a0, 'A', InputUpperWASD
+	beq $a0, 's', InputLowerWASD
+	beq $a0, 'S', InputUpperWASD
+	beq $a0, 'd', InputLowerWASD
+	beq $a0, 'D', InputUpperWASD
 	li $v0, 0
-	j ReturnMove
-	InputW:
-		add $a1, $a1, -6
-		j ReturnMove
-	InputA:
-		add $a0, $a0, -6
-		j ReturnMove
-	InputS:
-		add $a1, $a1, 6
-		j ReturnMove
-	InputD:
-		add $a0, $a0, 6
-		j ReturnMove
-	ReturnMove:
-		jal CheckMoveConditions
-		sb $v0, frogPosition
-		sb $v1, frogPosition + 1
-		
+	j ReturnInputWASD
+	InputUpperWASD:
+		addi $a0, $a0, 0x20
+	InputLowerWASD:
+		move $v1, $a0
+	
+	ReturnInputWASD:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
+		jr $ra
+		
+InputIJKL: # $a0 is keyboard input, $v0 is whether or not input was ijkl (0/1), $v1 is simplified input (w/a/s/d)
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	li $v0, 1
+	beq $a0, 'i', InputIToW
+	beq $a0, 'I', InputIToW
+	beq $a0, 'j', InputJToA
+	beq $a0, 'J', InputJToA
+	beq $a0, 'k', InputKToS
+	beq $a0, 'K', InputKToS
+	beq $a0, 'l', InputLToD
+	beq $a0, 'L', InputLToD
+	li $v0, 0
+	j ReturnInputIJKL
+	InputIToW:
+		li $v1, 'w'
+		j ReturnInputIJKL
+	InputJToA:
+		li $v1, 'a'
+		j ReturnInputIJKL
+	InputKToS:
+		li $v1, 's'
+		j ReturnInputIJKL
+	InputLToD:
+		li $v1, 'd'
+		j ReturnInputIJKL
+	
+	ReturnInputIJKL:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+	
+Move: # $a0 is move direction (w/a/s/d), $a1 is frogPosition (mem address), $a2 is initFrogPosition (mem address)
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	sw $s0, 0($sp)
+	
+	move $t0, $a0 # $t0 preserves move direction (w/a/s/d)
+	move $s0, $a1 # $s0 preserves frogPosition (mem address)
+	move $a3, $a2
+	move $a2, $a1
+	lb $a0, 0($s0)
+	lb $a1, 1($s0)
+	beq $t0, 'w', MoveForward
+	beq $t0, 'a', MoveLeft
+	beq $t0, 's', MoveBackward
+	beq $t0, 'd', MoveRight
+	j ReturnMove
+	MoveForward:
+		add $a1, $a1, -6
+		j ReturnMove
+	MoveLeft:
+		add $a0, $a0, -6
+		j ReturnMove
+	MoveBackward:
+		add $a1, $a1, 6
+		j ReturnMove
+	MoveRight:
+		add $a0, $a0, 6
+	ReturnMove:
+		jal CheckMoveConditions		
+		sb $v0, 0($s0)
+		sb $v1, 1($s0)
+		
+		lw $s0, 0($sp)
+		lw $ra, 4($sp)
+		addi $sp, $sp, 8
 		jr $ra
 		
 Shift:
@@ -550,7 +611,7 @@ CompletedFrogs:
 	li $s1, 0 # $s1 is the number of frogs checked
 	la $s2, frog # $s2 is the frog array (mem address)
 	li $s3, 5 # $s3 is the length of the frog array
-	DrawFrog:
+	DrawCompletedFrog:
 		move $a0, $s2
 		move $a1, $s3
 		lb $t2, 2($s0)
@@ -560,7 +621,7 @@ CompletedFrogs:
 		DrawFrogIncrement:
 			add $s0, $s0, 3
 			addi $s1, $s1, 1
-			bne $s1, 5, DrawFrog
+			bne $s1, 5, DrawCompletedFrog
 	
 	lw $s3, 0($sp)
 	lw $s2, 4($sp)
@@ -570,12 +631,16 @@ CompletedFrogs:
 	addi $sp, $sp, 20
 	jr $ra
 		
-CheckStandConditions:
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
+CheckStandConditions: # $a0 is frogPosition (mem address), $a1 is initFrogPosition (mem address)
+	addi $sp, $sp, -12
+	sw $ra, 8($sp)
+	sw $s0, 4($sp)
+	sw $s1, 0($sp)
 	
-	lb $a0, frogPosition
-	lb $a1, frogPosition + 1
+	move $s0, $a0 # $s0 preserves frogPosition (mem address)
+	move $s1, $a1 # $s1 preserves initFrogPosition (mem address)
+	lb $a0, 0($s0)
+	lb $a1, 1($s0)
 	addi $a1, $a1, 1
 	jal GetPositionColour
 	move $a2, $v0
@@ -583,40 +648,46 @@ CheckStandConditions:
 	li $a1, 2
 	jal Contains
 	beqz $v0, ReturnCheckStandConditions
-	li $t0, 30
-	li $t1, 54
-	sb $t0, frogPosition
-	sb $t1, frogPosition + 1
 	jal AddLossToLives
+	lb $t0, 0($s1)
+	lb $t1, 1($s1)
+	sb $t0, 0($s0)
+	sb $t1, 1($s0)
 		
 	ReturnCheckStandConditions:
-		lw $ra, 0($sp)
-		addi $sp, $sp, 4
+		lw $s1, 0($sp)
+		lw $s0, 4($sp)
+		lw $ra, 8($sp)
+		addi $sp, $sp, 12
 		jr $ra
 		
-CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (unit) - $v0, $v1 are result x, y coord of frog position (unit)
-	addi $sp, $sp, -16
-	sw $ra, 12($sp)
-	sw $s0, 8($sp)
-	sw $s1, 4($sp)
-	sw $s2, 0($sp)
+CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (unit), $a2 is frogPosition (mem address), $a3 is initFrogPosition (mem address) - $v0, $v1 are result x, y coord of frog position (unit)
+	addi $sp, $sp, -24
+	sw $ra, 20($sp)
+	sw $s0, 16($sp)
+	sw $s1, 12($sp)
+	sw $s2, 8($sp)
+	sw $s3, 4($sp)
+	sw $s4, 0($sp)
 	
 	move $s0, $a0 # $s0 is the intended x-coord of frog position (unit)
 	move $s1, $a1 # $s1 is the intended y-coord of frog position (unit)
+	move $s2, $a2 # $s2 is frogPosition (mem address)
+	move $s3, $a3 # $s3 is initFrogPosition (mem address)
 	addi $a0, $a0, 1
 	addi $a1, $a1, 1
 	jal GetPositionColour
-	move $s2, $v0 # $s2 is the color of intended frog position (char)
+	move $s4, $v0 # $s4 is the color of intended frog position (char)
 	
 	la $a0, forbiddenColours
 	li $a1, 2
-	move $a2, $s2
+	move $a2, $s4
 	jal Contains
 	bnez $v0, ReturnMoveForbidden
 	
 	la $a0, loseColours
 	li $a1, 2
-	move $a2, $s2
+	move $a2, $s4
 	jal Contains
 	bnez $v0, ReturnMoveLoss
 	
@@ -624,30 +695,33 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	j ReturnMoveApproved
 	
 	ReturnMoveForbidden:
-		lb $v0, frogPosition
-		lb $v1, frogPosition + 1
+		lb $v0, 0($s2)
+		lb $v1, 1($s2)
 		j ReturnCheckMoveConditions	
 	ReturnMoveLoss:
-		li $v0, 30
-		li $v1, 54
 		jal AddLossToLives
+		lb $v0, 0($s3)
+		lb $v1, 1($s3)
 		j ReturnCheckMoveConditions
 	ReturnMoveWin:
 		move $a0, $s0
 		move $a1, $s1
 		jal MarkWin
-		li $v0, 30
-		li $v1, 54
+		lb $v0, 0($s3)
+		lb $v1, 1($s3)
 		j ReturnCheckMoveConditions
 	ReturnMoveApproved:
 		move $v0, $s0
 		move $v1, $s1
+		
 	ReturnCheckMoveConditions:
-		lw $s2, 0($sp)
-		lw $s1, 4($sp)
-		lw $s0, 8($sp)
-		lw $ra, 12($sp)	
-		addi $sp, $sp, 16
+		lw $s4, 0($sp)
+		lw $s3, 4($sp)
+		lw $s2, 8($sp)
+		lw $s1, 12($sp)
+		lw $s0, 16($sp)
+		lw $ra, 20($sp)	
+		addi $sp, $sp, 24
 		jr $ra
 	
 GetPositionColour: # $a0, $a1 are x, y coord (unit), $v0 returns colour of position (char)
@@ -742,6 +816,103 @@ PrintData:
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
+		
+##### Milestone 5 Functions #####
+DrawFrog:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lb $t0, multiPlayer
+	beqz $t0, DrawFrogSingle
+	j DrawFrogMulti
+	
+	DrawFrogSingle:
+		la $a0, frog
+		li $a1, 5
+		la $a2, frogPosition
+		li $a3, 0
+		jal RectArray
+		j ReturnDrawFrog
+	DrawFrogMulti:
+		la $a0, frog
+		li $a1, 5
+		la $a2, frogPositionMulti
+		li $a3, 0
+		jal RectArray
+		la $a0, frog
+		li $a1, 5
+		la $a2, frogPositionMulti + 2
+		li $a3, 0
+		jal RectArray
+	
+	ReturnDrawFrog:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+CheckMoveInput: # $a0 is keyboard input (char), $v0 returns whether or not input was valid move input (0/1)
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+
+	lb $t0, multiPlayer
+	beqz $t0, MoveInputSingle
+	j MoveInputMulti
+	
+	MoveInputSingle:
+		jal InputWASD
+		move $a0, $v1
+		beqz $v0, ReturnCheckMoveInput
+		la $a1, frogPosition
+		la $a2, initFrogPosition
+		jal Move
+		j ReturnCheckMoveInput
+	MoveInputMulti:
+		jal InputWASD
+		bnez $v0, MoveInputFrog1
+		jal InputIJKL
+		bnez $v0, MoveInputFrog2
+		beqz $v0, ReturnCheckMoveInput
+		MoveInputFrog1:
+			move $a0, $v1
+			la $a1, frogPositionMulti
+			la $a2, initFrogPositionMulti
+			jal Move
+			j ReturnCheckMoveInput
+		MoveInputFrog2:
+			move $a0, $v1
+			la $a1, frogPositionMulti + 2
+			la $a2, initFrogPositionMulti + 2
+			jal Move
+	
+	ReturnCheckMoveInput:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+CheckAllStandConditions:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+
+	lb $t0, multiPlayer
+	beqz $t0, CheckStandSingle
+	j CheckStandMulti
+	
+	CheckStandSingle:
+		la $a0, frogPosition
+		la $a1, initFrogPosition
+		jal CheckStandConditions
+	CheckStandMulti:
+		la $a0, frogPositionMulti
+		la $a1, initFrogPositionMulti
+		jal CheckStandConditions
+		la $a0, frogPositionMulti + 2
+		la $a1, initFrogPositionMulti + 2
+		jal CheckStandConditions
+	
+	ReturnCheckAllStand:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
 		
 ##### Utility Functions #####
 PrintInt: # $a0 is int to print - all registers are preserved
