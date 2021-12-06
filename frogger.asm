@@ -13,12 +13,13 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 4 + 1 easy feature
+# - Milestone 5
 #
 # Which approved additional features have been implemented?
 # - Easy Feature #1: display lives
 # - Easy Feature #5: different rows move with different speed (speed & direction is customizable by changing shiftDirection array)
 # - Easy Feature #6: 3 rows of vehicles & logs
+# - Hard Feature #6: 2 player mode (change using multiPlayer byte in memory)
 # - Hard Feature #7: display score
 #
 # Any additional information that the TA needs to know:
@@ -90,6 +91,7 @@
 		1, 1 # logs - row 3
 	
 	##### Milestone 3 Data #####
+	wins: .byte 0
 	completedFrogs: .byte 6, 6, 0, # safe region 1
 		18, 6, 0, # safe region 2
 		30, 6, 0, # safe region 3
@@ -105,7 +107,6 @@
 	separatorText: .asciiz "----------"
 	
 	##### Milestone 5 Data #####
-	multiPlayer: .byte 1
 	frogDataMulti: .byte 18, 54, # frog position 1
 		18, 54, # init frog position 1
 		3, # lives 1
@@ -116,6 +117,7 @@
 		3, # lives 1
 		0, # game time 2
 		0, 0 # score 2 (half word)
+	multiPlayer: .byte 1 # TODO move up if you can
 		
 .text
 main:
@@ -136,6 +138,8 @@ LoopInit:
 	
 	jal CheckInitConditions
 	jal CheckInput
+	lb $t0, wins
+	bge $t0, 5, Exit
 	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
@@ -747,6 +751,9 @@ MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit), $a2 is fro
 			bne $s1, 5, NextFrog
 	move $a0, $a2
 	jal AddWinToScore
+	lb $t0, wins
+	addi $t0, $t0, 1
+	sb $t0, wins
 	
 	lw $s1, 0($sp)
 	lw $s0, 4($sp)
@@ -1059,5 +1066,6 @@ Contains: # $a0 is beginning of array (mem address), $a1 is length of array, $a2
 		jr $ra
 	
 Exit:
+	jal LoopDraw
 	li $v0, 10 # terminate the program gracefully
 	syscall
