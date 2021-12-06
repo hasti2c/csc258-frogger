@@ -79,8 +79,11 @@
 	##### Milestone 2 Data #####
 	inputAddress: .word 0xffff0000
 	scenePosition: .byte 0, 0
-	initFrogPosition: .byte 30, 54
-	frogPosition: .byte 30, 54
+	frogData: .byte 30, 54, # frog position
+		30, 54, # init frog position
+		3, # lives
+		0, # game time
+		0 # score
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
 	shiftDirection: .byte 2, 2, 2, # vehicles - row 1
@@ -108,11 +111,17 @@
 	score: .half 0
 	
 	##### Milestone 5 Data #####
-	multiPlayer: .byte 1
-	initFrogPositionMulti: .byte 18, 54,
-		42, 54
-	frogPositionMulti: .byte 18, 54,
-		42, 54
+	multiPlayer: .byte 0
+	frogDataMulti: .byte 18, 54, # frog position 1
+		18, 54, # init frog position 1
+		3, # lives 1
+		0, # game time 1
+		0, # score 1
+		42, 54, # frog position 2
+		42, 54, # init frog position 2
+		3, # lives 1
+		0, # game time 2
+		0 # score 1
 		
 .text
 main:
@@ -498,14 +507,13 @@ InputIJKL: # $a0 is keyboard input, $v0 is whether or not input was ijkl (0/1), 
 		addi $sp, $sp, 4
 		jr $ra
 	
-Move: # $a0 is move direction (w/a/s/d), $a1 is frogPosition (mem address), $a2 is initFrogPosition (mem address)
+Move: # $a0 is move direction (w/a/s/d), $a1 is frogData (mem address)
 	addi $sp, $sp, -8
 	sw $ra, 4($sp)
 	sw $s0, 0($sp)
 	
 	move $t0, $a0 # $t0 preserves move direction (w/a/s/d)
-	move $s0, $a1 # $s0 preserves frogPosition (mem address)
-	move $a3, $a2
+	move $s0, $a1 # $s0 preserves frogData (mem address)
 	move $a2, $a1
 	lb $a0, 0($s0)
 	lb $a1, 1($s0)
@@ -631,14 +639,12 @@ CompletedFrogs:
 	addi $sp, $sp, 20
 	jr $ra
 		
-CheckStandConditions: # $a0 is frogPosition (mem address), $a1 is initFrogPosition (mem address)
-	addi $sp, $sp, -12
-	sw $ra, 8($sp)
-	sw $s0, 4($sp)
-	sw $s1, 0($sp)
+CheckStandConditions: # $a0 is frogPosition (mem address)
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	sw $s0, 0($sp)
 	
 	move $s0, $a0 # $s0 preserves frogPosition (mem address)
-	move $s1, $a1 # $s1 preserves initFrogPosition (mem address)
 	lb $a0, 0($s0)
 	lb $a1, 1($s0)
 	addi $a1, $a1, 1
@@ -649,45 +655,42 @@ CheckStandConditions: # $a0 is frogPosition (mem address), $a1 is initFrogPositi
 	jal Contains
 	beqz $v0, ReturnCheckStandConditions
 	jal AddLossToLives
-	lb $t0, 0($s1)
-	lb $t1, 1($s1)
+	lb $t0, 2($s0)
+	lb $t1, 3($s0)
 	sb $t0, 0($s0)
 	sb $t1, 1($s0)
 		
 	ReturnCheckStandConditions:
-		lw $s1, 0($sp)
-		lw $s0, 4($sp)
-		lw $ra, 8($sp)
-		addi $sp, $sp, 12
+		lw $s0, 0($sp)
+		lw $ra, 4($sp)
+		addi $sp, $sp, 8
 		jr $ra
 		
-CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (unit), $a2 is frogPosition (mem address), $a3 is initFrogPosition (mem address) - $v0, $v1 are result x, y coord of frog position (unit)
-	addi $sp, $sp, -24
-	sw $ra, 20($sp)
-	sw $s0, 16($sp)
-	sw $s1, 12($sp)
-	sw $s2, 8($sp)
-	sw $s3, 4($sp)
-	sw $s4, 0($sp)
+CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (unit), $a2 is frogData (mem address) - $v0, $v1 are result x, y coord of frog position (unit)
+	addi $sp, $sp, -20
+	sw $ra, 16($sp)
+	sw $s0, 12($sp)
+	sw $s1, 8($sp)
+	sw $s2, 4($sp)
+	sw $s3, 0($sp)
 	
 	move $s0, $a0 # $s0 is the intended x-coord of frog position (unit)
 	move $s1, $a1 # $s1 is the intended y-coord of frog position (unit)
 	move $s2, $a2 # $s2 is frogPosition (mem address)
-	move $s3, $a3 # $s3 is initFrogPosition (mem address)
 	addi $a0, $a0, 1
 	addi $a1, $a1, 1
 	jal GetPositionColour
-	move $s4, $v0 # $s4 is the color of intended frog position (char)
+	move $s3, $v0 # $s3 is the color of intended frog position (char)
 	
 	la $a0, forbiddenColours
 	li $a1, 2
-	move $a2, $s4
+	move $a2, $s3
 	jal Contains
 	bnez $v0, ReturnMoveForbidden
 	
 	la $a0, loseColours
 	li $a1, 2
-	move $a2, $s4
+	move $a2, $s3
 	jal Contains
 	bnez $v0, ReturnMoveLoss
 	
@@ -700,28 +703,27 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 		j ReturnCheckMoveConditions	
 	ReturnMoveLoss:
 		jal AddLossToLives
-		lb $v0, 0($s3)
-		lb $v1, 1($s3)
+		lb $v0, 2($s2)
+		lb $v1, 3($s2)
 		j ReturnCheckMoveConditions
 	ReturnMoveWin:
 		move $a0, $s0
 		move $a1, $s1
 		jal MarkWin
-		lb $v0, 0($s3)
-		lb $v1, 1($s3)
+		lb $v0, 2($s2)
+		lb $v1, 3($s2)
 		j ReturnCheckMoveConditions
 	ReturnMoveApproved:
 		move $v0, $s0
 		move $v1, $s1
 		
 	ReturnCheckMoveConditions:
-		lw $s4, 0($sp)
-		lw $s3, 4($sp)
-		lw $s2, 8($sp)
-		lw $s1, 12($sp)
-		lw $s0, 16($sp)
-		lw $ra, 20($sp)	
-		addi $sp, $sp, 24
+		lw $s3, 0($sp)
+		lw $s2, 4($sp)
+		lw $s1, 8($sp)
+		lw $s0, 12($sp)
+		lw $ra, 16($sp)	
+		addi $sp, $sp, 20
 		jr $ra
 	
 GetPositionColour: # $a0, $a1 are x, y coord (unit), $v0 returns colour of position (char)
@@ -829,19 +831,19 @@ DrawFrog:
 	DrawFrogSingle:
 		la $a0, frog
 		li $a1, 5
-		la $a2, frogPosition
+		la $a2, frogData
 		li $a3, 0
 		jal RectArray
 		j ReturnDrawFrog
 	DrawFrogMulti:
 		la $a0, frog
 		li $a1, 5
-		la $a2, frogPositionMulti
+		la $a2, frogDataMulti
 		li $a3, 0
 		jal RectArray
 		la $a0, frog
 		li $a1, 5
-		la $a2, frogPositionMulti + 2
+		la $a2, frogDataMulti + 7
 		li $a3, 0
 		jal RectArray
 	
@@ -862,8 +864,7 @@ CheckMoveInput: # $a0 is keyboard input (char), $v0 returns whether or not input
 		jal InputWASD
 		move $a0, $v1
 		beqz $v0, ReturnCheckMoveInput
-		la $a1, frogPosition
-		la $a2, initFrogPosition
+		la $a1, frogData
 		jal Move
 		j ReturnCheckMoveInput
 	MoveInputMulti:
@@ -874,14 +875,12 @@ CheckMoveInput: # $a0 is keyboard input (char), $v0 returns whether or not input
 		beqz $v0, ReturnCheckMoveInput
 		MoveInputFrog1:
 			move $a0, $v1
-			la $a1, frogPositionMulti
-			la $a2, initFrogPositionMulti
+			la $a1, frogDataMulti
 			jal Move
 			j ReturnCheckMoveInput
 		MoveInputFrog2:
 			move $a0, $v1
-			la $a1, frogPositionMulti + 2
-			la $a2, initFrogPositionMulti + 2
+			la $a1, frogDataMulti + 7
 			jal Move
 	
 	ReturnCheckMoveInput:
@@ -898,15 +897,12 @@ CheckAllStandConditions:
 	j CheckStandMulti
 	
 	CheckStandSingle:
-		la $a0, frogPosition
-		la $a1, initFrogPosition
+		la $a0, frogData
 		jal CheckStandConditions
 	CheckStandMulti:
-		la $a0, frogPositionMulti
-		la $a1, initFrogPositionMulti
+		la $a0, frogDataMulti
 		jal CheckStandConditions
-		la $a0, frogPositionMulti + 2
-		la $a1, initFrogPositionMulti + 2
+		la $a0, frogDataMulti + 7
 		jal CheckStandConditions
 	
 	ReturnCheckAllStand:
