@@ -44,17 +44,13 @@
 		0, 5, 5, 59, 'b', # border left
 		5, 53, 54, 6, 'g', # safe bottom
 		5, 29, 54, 6, 'g', # safe mid
+		5, 35, 54, 18, 's', # road
+		5, 5, 54, 24, 'l', # water
 		5, 5, 7, 6, 'g', # safe top 1
-		12, 5, 4, 6, 'l', # unsafe top 1
 		16, 5, 8, 6, 'g', # safe top 2
-		24, 5, 4, 6, 'l', # unsafe top 2
 		28, 5, 8, 6, 'g', # safe top 3
-		36, 5, 4, 6, 'l', # unsafe top 3
 		40, 5, 8, 6, 'g', # safe top 4
-		48, 5, 4, 6, 'l', # unsafe top 5
-		52, 5, 7, 6, 'g', # safe top 5
-		5, 11, 54, 18, 'l', # water
-		5, 35, 54, 18, 's' # road
+		52, 5, 7, 6, 'g' # safe top 5
 	frog: .byte 1, 1, 2, 2, 'f', # body
 		0, 0, 1, 1, 'f', # top left
 		3, 0, 1, 1, 'f', # top right
@@ -83,13 +79,13 @@
 		30, 54, # init frog position
 		3, # lives
 		0, # game time
-		0 # score
+		0, 0 # score (half word)
 	roadPosition: .byte 5, 35
 	waterPosition: .byte 5, 11
 	shiftDirection: .byte 2, 2, 2, # vehicles - row 1
 		-1, -1, # vehicles - row 2
 		1, 1, 1, # vehicles - row 3
-		2, 2, # logs - row 1
+		1, 1, # logs - row 1
 		-1, -1, -1, # logs - row 2
 		1, 1 # logs - row 3
 	
@@ -105,28 +101,26 @@
 	##### Milestone 4 Data #####
 	livesText: .asciiz "lives:"
 	scoreText: .asciiz "score:"
+	inlineSeparatorText: .asciiz "/"
 	separatorText: .asciiz "----------"
-	lives: .byte 3
-	gameTime: .byte 0
-	score: .half 0
 	
 	##### Milestone 5 Data #####
-	multiPlayer: .byte 0
+	multiPlayer: .byte 1
 	frogDataMulti: .byte 18, 54, # frog position 1
 		18, 54, # init frog position 1
 		3, # lives 1
 		0, # game time 1
-		0, # score 1
+		0, 0, # score 1 (half word)
 		42, 54, # frog position 2
 		42, 54, # init frog position 2
 		3, # lives 1
 		0, # game time 2
-		0 # score 1
+		0, 0 # score 2 (half word)
 		
 .text
 main:
 	li $s0, 0 # $s0 is the number of times MainLoop has been run
-	jal PrintData
+	jal PrintAllData
 	MainLoop:
 		jal LoopInit
 		jal LoopDraw
@@ -140,10 +134,8 @@ LoopInit:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
-	jal CheckAllStandConditions
+	jal CheckInitConditions
 	jal CheckInput
-	lb $t0, lives
-	blez $t0, Exit
 	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
@@ -164,16 +156,10 @@ LoopDraw:
 	jr $ra
 	
 LoopTime: # uses $s0 same as main
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
-
 	li $v0, 32
 	li $a0, 16
 	syscall
 	addi $s0, $s0, 1
-		
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
 	jr $ra
 	
 LoopSecond: # uses $s0 same as main
@@ -182,15 +168,13 @@ LoopSecond: # uses $s0 same as main
 
 	li $s0, 0
 	jal Shift
-	lb $t0, gameTime # $t0 is the gameTime (seconds)
-	beq $t0, 100, ReturnLoopSecond
-	addi $t0, $t0, 1
-	sb $t0, gameTime
+	jal UpdateGameTime
 	
 	ReturnLoopSecond:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
+
 				
 ##### Milestone 1 Functions #####
 Clear:
@@ -217,7 +201,7 @@ Scene:
 	sw $ra, 0($sp)
 	
 	la $a0, scene
-	li $a1, 17
+	li $a1, 13
 	la $a2, scenePosition
 	li $a3, 0
 	jal RectArray
@@ -558,16 +542,16 @@ Shift:
 		blt $t3, 0, LeftShiftOverflow
 		j ShiftDone
 		RightShiftOverflow:
-		add $t3, $t3, -54
-		j ShiftDone
+			add $t3, $t3, -54
+			j ShiftDone
 		LeftShiftOverflow:
-		add $t3, $t3, 54
+			add $t3, $t3, 54
 		ShiftDone:
-		sb $t3, 0($t0)
-		add $t0, $t0, 5
-		add $t1, $t1, 1
-		add $t2, $t2, 1
-		bne $t1, 15, ShiftElement
+			sb $t3, 0($t0)
+			add $t0, $t0, 5
+			add $t1, $t1, 1
+			add $t2, $t2, 1
+			bne $t1, 15, ShiftElement
 	jr $ra
 	
 RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has colour	
@@ -639,12 +623,12 @@ CompletedFrogs:
 	addi $sp, $sp, 20
 	jr $ra
 		
-CheckStandConditions: # $a0 is frogPosition (mem address)
+CheckStandConditions: # $a0 is frogData (mem address)
 	addi $sp, $sp, -8
 	sw $ra, 4($sp)
 	sw $s0, 0($sp)
 	
-	move $s0, $a0 # $s0 preserves frogPosition (mem address)
+	move $s0, $a0 # $s0 preserves frogData (mem address)
 	lb $a0, 0($s0)
 	lb $a1, 1($s0)
 	addi $a1, $a1, 1
@@ -654,6 +638,7 @@ CheckStandConditions: # $a0 is frogPosition (mem address)
 	li $a1, 2
 	jal Contains
 	beqz $v0, ReturnCheckStandConditions
+	move $a0, $s0
 	jal AddLossToLives
 	lb $t0, 2($s0)
 	lb $t1, 3($s0)
@@ -676,7 +661,7 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	
 	move $s0, $a0 # $s0 is the intended x-coord of frog position (unit)
 	move $s1, $a1 # $s1 is the intended y-coord of frog position (unit)
-	move $s2, $a2 # $s2 is frogPosition (mem address)
+	move $s2, $a2 # $s2 is frogData (mem address)
 	addi $a0, $a0, 1
 	addi $a1, $a1, 1
 	jal GetPositionColour
@@ -702,6 +687,7 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 		lb $v1, 1($s2)
 		j ReturnCheckMoveConditions	
 	ReturnMoveLoss:
+		move $a0, $s2
 		jal AddLossToLives
 		lb $v0, 2($s2)
 		lb $v1, 3($s2)
@@ -709,6 +695,7 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	ReturnMoveWin:
 		move $a0, $s0
 		move $a1, $s1
+		move $a2, $s2
 		jal MarkWin
 		lb $v0, 2($s2)
 		lb $v1, 3($s2)
@@ -741,7 +728,7 @@ GetPositionColour: # $a0, $a1 are x, y coord (unit), $v0 returns colour of posit
 	addi $sp, $sp, 4
 	jr $ra
 	
-MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
+MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit), $a2 is frogData (mem address)
 	addi $sp, $sp, -12
 	sw $ra, 8($sp)
 	sw $s0, 4($sp)
@@ -754,11 +741,12 @@ MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
 		bne $t0, $a0, NextFrogIncrement
 		li $t0, 1
 		sb $t0, 2($s0)
-		jal AddWinToScore
 		NextFrogIncrement:
 			add $s0, $s0, 3
 			addi $s1, $s1, 1
 			bne $s1, 5, NextFrog
+	move $a0, $a2
+	jal AddWinToScore
 	
 	lw $s1, 0($sp)
 	lw $s0, 4($sp)
@@ -767,56 +755,57 @@ MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
 	jr $ra
 		
 ##### Milestone 4 Functions #####
-AddWinToScore:
+AddWinToScore: # $a0 is frogData (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
-	lh $t0, score # $t0 is the score
+	lh $t0, 6($a0) # $t0 is the score
 	addi $t0, $t0, 1200
-	lh $t1, gameTime
+	lb $t1, 5($a0)
 	sll $t1, $t1, 1
 	sub $t0, $t0, $t1
-	sh $t0, score
-	sb $zero, gameTime
-	jal PrintData
+	sh $t0, 6($a0)
+	sb $zero, 5($a0)
+	jal PrintAllData
 	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
-AddLossToLives:
+AddLossToLives: # $a0 is frogData (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 
-	lb $t0, lives
+	lb $t0, 4($a0)
 	addi $t0, $t0, -1
-	sb $t0, lives
-	jal PrintData
+	sb $t0, 4($a0)
+	jal PrintAllData
 	
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
-PrintData:
-	addi $sp, $sp, -4
-	sw $ra, 0($sp)
+PrintData: # $a0 is frogData (mem address)
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	sw $s0, 0($sp)
 	
+	move $s0, $a0 # $s0 preserves frogData (mem address)
 	la $a0, livesText
 	jal PrintString
-	lb $a0, lives
+	lb $a0, 4($s0)
 	jal PrintInt
-	jal NextLine
+	la $a0, inlineSeparatorText
+	jal PrintString
 	la $a0, scoreText
 	jal PrintString
-	lh $a0, score
+	lh $a0, 6($s0)
 	jal PrintInt
 	jal NextLine
-	la $a0, separatorText
-	jal PrintString
-	jal NextLine
 	
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
+	lw $s0, 0($sp)
+	lw $ra, 4($sp)
+	addi $sp, $sp, 8
 	jr $ra
 		
 ##### Milestone 5 Functions #####
@@ -829,28 +818,33 @@ DrawFrog:
 	j DrawFrogMulti
 	
 	DrawFrogSingle:
-		la $a0, frog
-		li $a1, 5
-		la $a2, frogData
-		li $a3, 0
-		jal RectArray
+		la $a0, frogData
+		jal DrawFrogHelper
 		j ReturnDrawFrog
 	DrawFrogMulti:
-		la $a0, frog
-		li $a1, 5
-		la $a2, frogDataMulti
-		li $a3, 0
-		jal RectArray
-		la $a0, frog
-		li $a1, 5
-		la $a2, frogDataMulti + 7
-		li $a3, 0
-		jal RectArray
+		la $a0, frogDataMulti
+		jal DrawFrogHelper
+		la $a0, frogDataMulti + 8
+		jal DrawFrogHelper
 	
 	ReturnDrawFrog:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
+		
+DrawFrogHelper: # $a0 is frogData (mem address)
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	move $a2, $a0
+	la $a0, frog
+	li $a1, 5	
+	li $a3, 0
+	jal RectArray
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
 		
 CheckMoveInput: # $a0 is keyboard input (char), $v0 returns whether or not input was valid move input (0/1)
 	addi $sp, $sp, -4
@@ -880,7 +874,7 @@ CheckMoveInput: # $a0 is keyboard input (char), $v0 returns whether or not input
 			j ReturnCheckMoveInput
 		MoveInputFrog2:
 			move $a0, $v1
-			la $a1, frogDataMulti + 7
+			la $a1, frogDataMulti + 8
 			jal Move
 	
 	ReturnCheckMoveInput:
@@ -888,27 +882,102 @@ CheckMoveInput: # $a0 is keyboard input (char), $v0 returns whether or not input
 		addi $sp, $sp, 4
 		jr $ra
 		
-CheckAllStandConditions:
+CheckInitConditions:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lb $t0, multiPlayer
+	beqz $t0, CheckInitSingle
+	j CheckInitMulti
+	
+	CheckInitSingle:
+		la $a0, frogData
+		jal CheckInitConditionsHelper
+		j ReturnCheckInit
+	CheckInitMulti:
+		la $a0, frogDataMulti
+		jal CheckInitConditionsHelper
+		la $a0, frogDataMulti + 8
+		jal CheckInitConditionsHelper
+		
+	ReturnCheckInit:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+CheckInitConditionsHelper: # $a0 is frogData (mem address)
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	sw $s0, 0($sp)
+	
+	move $s0, $a0 # $s0 preserves frogData (mem address)
+	jal CheckStandConditions
+	lb $t0, 4($s0)
+	blez $t0, Exit
+	
+	lw $s0, 0($sp)
+	lw $ra, 4($sp)
+	addi $sp, $sp, 8
+	jr $ra
+		
+UpdateGameTime:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 
 	lb $t0, multiPlayer
-	beqz $t0, CheckStandSingle
-	j CheckStandMulti
-	
-	CheckStandSingle:
+	beqz $t0, UpdateGameTimeSingle
+	j UpdateGameTimeMulti
+
+	UpdateGameTimeSingle:
 		la $a0, frogData
-		jal CheckStandConditions
-	CheckStandMulti:
+		jal UpdateGameTimeHelper
+		j ReturnUpdateAllGameTime
+	UpdateGameTimeMulti:
 		la $a0, frogDataMulti
-		jal CheckStandConditions
-		la $a0, frogDataMulti + 7
-		jal CheckStandConditions
+		jal UpdateGameTimeHelper
+		la $a0, frogDataMulti + 8
+		jal UpdateGameTimeHelper
 	
-	ReturnCheckAllStand:
+	ReturnUpdateAllGameTime:
 		lw $ra, 0($sp)
 		addi $sp, $sp, 4
 		jr $ra
+		
+UpdateGameTimeHelper: # $a0 is frogData (mem address)
+	lb $t0, 5($a0) # $t0 is the gameTime (seconds)
+	beq $t0, 100, ReturnUpdateGameTimeHelper
+	addi $t0, $t0, 1
+	sb $t0, 5($a0)
+	
+	ReturnUpdateGameTimeHelper:
+		jr $ra
+
+PrintAllData:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lb $t0, multiPlayer
+	beqz $t0, PrintDataSingle
+	j PrintDataMulti
+	
+	PrintDataSingle:
+		la $a0, frogData
+		jal PrintData
+		j PrintDataSeparator
+	PrintDataMulti:
+		la $a0, frogDataMulti
+		jal PrintData
+		la $a0, frogDataMulti + 8
+		jal PrintData
+	
+	PrintDataSeparator:
+		la $a0, separatorText
+		jal PrintString
+		jal NextLine
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
 		
 ##### Utility Functions #####
 PrintInt: # $a0 is int to print - all registers are preserved
