@@ -13,11 +13,13 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission?
-# - Milestone 3 + 2 easy features
+# - Milestone 4 + 1 easy feature
 #
 # Which approved additional features have been implemented?
+# - Easy Feature #1: display lives
 # - Easy Feature #5: different rows move with different speed (speed & direction is customizable by changing shiftDirection array)
 # - Easy Feature #6: 3 rows of vehicles & logs
+# - Hard Feature #7: display score
 #
 # Any additional information that the TA needs to know:
 # - ...
@@ -95,36 +97,46 @@
 		54, 6, 0 # safe region 5
 	forbiddenColours: .byte 'b', 'f' # border & frog
 	loseColours: .byte 'r', 'l' # cars & water
+	
+	##### Milestone 4 Data #####
+	livesText: .asciiz "lives:"
+	scoreText: .asciiz "score:"
+	separatorText: .asciiz "----------"
 	lives: .byte 3
+	gameTime: .byte 0
+	score: .half 0
 		
 .text
 main:
 	li $s0, 0 # $s0 is the number of times MainLoop has been run
-	jal Clear
+	jal PrintData
 	MainLoop:
-		jal CheckStandConditions
-		jal CheckInput
-		lb $t0, lives
-		blez $t0, Exit
-		
-		jal Draw
-		
-		li $v0, 32
-		li $a0, 16
-		syscall
-		addi $s0, $s0, 1
+		jal LoopInit
+		jal LoopDraw
+		jal LoopTime
 		bne $s0, 30, MainLoop
-		
-		li $s0, 0
-		jal Shift
+		jal LoopSecond
 		j MainLoop
 	j Exit
 		
-##### Milestone 1 Functions #####
-Draw:
+LoopInit:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
+	jal CheckStandConditions
+	jal CheckInput
+	lb $t0, lives
+	blez $t0, Exit
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
+LoopDraw:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	jal Clear
 	jal Scene
 	jal FrogRoadWater
 	jal CompletedFrogs
@@ -133,7 +145,37 @@ Draw:
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
+	
+LoopTime: # uses $s0 same as main
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
 
+	li $v0, 32
+	li $a0, 16
+	syscall
+	addi $s0, $s0, 1
+		
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+LoopSecond: # uses $s0 same as main
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+
+	li $s0, 0
+	jal Shift
+	lb $t0, gameTime # $t0 is the gameTime (seconds)
+	beq $t0, 100, ReturnLoopSecond
+	addi $t0, $t0, 1
+	sb $t0, gameTime
+	
+	ReturnLoopSecond:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+				
+##### Milestone 1 Functions #####
 Clear:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -545,7 +587,7 @@ CheckStandConditions:
 	li $t1, 54
 	sb $t0, frogPosition
 	sb $t1, frogPosition + 1
-	jal CountLoss
+	jal AddLossToLives
 		
 	ReturnCheckStandConditions:
 		lw $ra, 0($sp)
@@ -588,7 +630,7 @@ CheckMoveConditions: # $a0, $a1 are the intended x, y coord of frog position (un
 	ReturnMoveLoss:
 		li $v0, 30
 		li $v1, 54
-		jal CountLoss
+		jal AddLossToLives
 		j ReturnCheckMoveConditions
 	ReturnMoveWin:
 		move $a0, $s0
@@ -623,23 +665,82 @@ GetPositionColour: # $a0, $a1 are x, y coord (unit), $v0 returns colour of posit
 	addi $sp, $sp, 4
 	jr $ra
 	
-CountLoss:
+MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
+	addi $sp, $sp, -12
+	sw $ra, 8($sp)
+	sw $s0, 4($sp)
+	sw $s1, 0($sp)
+	
+	la $s0, completedFrogs # $s0 is current element of completed frogs array (mem address)
+	li $s1, 0 # st1 is the number of frogs checked
+	NextFrog:
+		lb $t0, 0($s0)
+		bne $t0, $a0, NextFrogIncrement
+		li $t0, 1
+		sb $t0, 2($s0)
+		jal AddWinToScore
+		NextFrogIncrement:
+			add $s0, $s0, 3
+			addi $s1, $s1, 1
+			bne $s1, 5, NextFrog
+	
+	lw $s1, 0($sp)
+	lw $s0, 4($sp)
+	lw $ra, 8($sp)
+	addi $sp, $sp, 12
+	jr $ra
+		
+##### Milestone 4 Functions #####
+AddWinToScore:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lh $t0, score # $t0 is the score
+	addi $t0, $t0, 1200
+	lh $t1, gameTime
+	sll $t1, $t1, 1
+	sub $t0, $t0, $t1
+	sh $t0, score
+	sb $zero, gameTime
+	jal PrintData
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+AddLossToLives:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+
 	lb $t0, lives
 	addi $t0, $t0, -1
 	sb $t0, lives
+	jal PrintData
 	
-MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit)
-	la $t0, completedFrogs # $t0 is current element of completed frogs array (mem address)
-	li $t1, 0 # $t1 is the number of frogs checked
-	NextFrog:
-		lb $t2, 0($t0)
-		bne $t2, $a0, NextFrogIncrement
-		li $t2, 1
-		sb $t2, 2($t0)
-		NextFrogIncrement:
-			add $t0, $t0, 3
-			addi $t1, $t1, 1
-			bne $t1, 5, NextFrog
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+PrintData:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	la $a0, livesText
+	jal PrintString
+	lb $a0, lives
+	jal PrintInt
+	jal NextLine
+	la $a0, scoreText
+	jal PrintString
+	lh $a0, score
+	jal PrintInt
+	jal NextLine
+	la $a0, separatorText
+	jal PrintString
+	jal NextLine
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
 	jr $ra
 		
 ##### Utility Functions #####
@@ -665,6 +766,22 @@ PrintChar: # $a0 is char to print - all registers are preserved
 	sw $v0, 0($sp)
 	
 	li $v0, 11
+	syscall
+	li $v0, 11
+	li $a0, 0x20
+	syscall
+	
+	lw $v0, 0($sp)
+	lw $a0, 4($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+PrintString: # $a0 is string to print - all registers are preserved
+	addi $sp, $sp, -8
+	sw $a0, 4($sp)
+	sw $v0, 0($sp)
+	
+	li $v0, 4
 	syscall
 	li $v0, 11
 	li $a0, 0x20
