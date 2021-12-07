@@ -23,11 +23,12 @@
 # - Hard Feature #7: display score
 #
 # Any additional information that the TA needs to know:
-# - ...
+# - At any point in the game, the 'R' key can be used to reset the game (including lives & scores).
+# - At any point in the game, the 'M' key can be used to toggle multiplayer mode on & off (game is reset).
 #
 #####################################################################
 .data
-	##### Milestone 1 Data #####
+	##### Display Data #####
 	displayAddress: .word 0x10008000
 	displayBuffer: .space 0x4000
 	black: .word 0x000000 # '0' - used for clear
@@ -73,7 +74,7 @@
 		6, 13, 12, 4, 'w', # row 3 - log 1
 		36, 13, 12, 4, 'w' # row 3 - log 2
 	
-	##### Milestone 2 Data #####
+	##### Movement Data #####
 	inputAddress: .word 0xffff0000
 	scenePosition: .byte 0, 0
 	frogData: .byte 30, 54, # frog position
@@ -90,7 +91,7 @@
 		-1, -1, -1, # logs - row 2
 		1, 1 # logs - row 3
 	
-	##### Milestone 3 Data #####
+	##### Game Logic Data #####
 	wins: .byte 0
 	completedFrogs: .byte 6, 6, 0, # safe region 1
 		18, 6, 0, # safe region 2
@@ -100,13 +101,13 @@
 	forbiddenColours: .byte 'b', 'f' # border & frog
 	loseColours: .byte 'r', 'l' # cars & water
 	
-	##### Milestone 4 Data #####
+	##### Game Stats Data #####
 	livesText: .asciiz "lives:"
 	scoreText: .asciiz "score:"
 	inlineSeparatorText: .asciiz "/"
 	separatorText: .asciiz "----------"
 	
-	##### Milestone 5 Data #####
+	##### Multiplayer Data #####
 	frogDataMulti: .byte 18, 54, # frog position 1
 		18, 54, # init frog position 1
 		3, # lives 1
@@ -117,15 +118,35 @@
 		3, # lives 1
 		0, # game time 2
 		0, 0 # score 2 (half word)
-	multiPlayer: .byte 1 # TODO move up if you can
+	multiPlayer: .byte 1
+	
+	##### Keybind Data #####
+	tick: .byte 0
+	initVehicles: .byte 6, 1, 6, 4, 'r', # row 1 - car 1
+		24, 1, 6, 4, 'r', # row 1 - car 2
+		42, 1, 6, 4, 'r', # row 1 - car 3
+		6, 7, 12, 4, 'r', # row 2 - car 1
+		36, 7, 12, 4, 'r', # row 2 - car 2
+		6, 13, 6, 4, 'r', # row 3 - car 1
+		24, 13, 6, 4, 'r', # row 3 - car 2
+		42, 13, 6, 4 'r' # row 3 - car 3
+	initLogs: .byte 6, 1, 12, 4, 'w', # row 1 - log 1
+		36, 1, 12, 4, 'w', # row 1 - log 2
+		6, 7, 6, 4, 'w', # row 2 - log 1
+		24, 7, 6, 4, 'w', # row 2 - log 2
+		42, 7, 6, 4, 'w', # row 2 - log 3
+		6, 13, 12, 4, 'w', # row 3 - log 1
+		36, 13, 12, 4, 'w' # row 3 - log 2
 
 .text
 main:
-	li $s0, 0 # $s0 is the number of times MainLoop has been run
+	li $s0, 0
 	jal PrintAllData
 	MainLoop:
+		sb $s0, tick
 		jal LoopInit
 		jal LoopDraw
+		lb $s0, tick
 		jal LoopTime
 		bne $s0, 30, MainLoop
 		jal LoopSecond
@@ -182,7 +203,7 @@ LoopSecond: # uses $s0 same as main
 		jr $ra
 
 				
-##### Milestone 1 Functions #####
+##### Display Functions #####
 Clear:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -423,7 +444,7 @@ FlushBuffer:
 	addi $sp, $sp, 4
 	jr $ra
 		
-#### Milestone 2 Functions #####
+#### Movement Functions #####
 CheckInput:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -433,6 +454,8 @@ CheckInput:
 	bne $t1, 1, ReturnCheckInput
 	lw $a0, 4($t0)
 	jal CheckMoveInput
+	bnez $v0, ReturnCheckInput
+	jal CheckKeybindInput
 	
 	ReturnCheckInput:
 		lw $ra, 0($sp)
@@ -524,7 +547,7 @@ Move: # $a0 is move direction (w/a/s/d), $a1 is frogData (mem address)
 	MoveRight:
 		add $a0, $a0, 6
 	ReturnMove:
-		jal CheckMoveConditions		
+		jal CheckMoveConditions
 		sb $v0, 0($s0)
 		sb $v1, 1($s0)
 		
@@ -678,8 +701,8 @@ RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of
 		lw $ra, 8($sp)
 		addi $sp, $sp, 12
 		jr $ra
-	
-##### Milestone 3 Functions #####
+
+##### Game Logic Functions #####
 CompletedFrogs:
 	addi $sp, $sp, -20
 	sw $ra, 16($sp)
@@ -846,7 +869,7 @@ MarkWin: # $a0, $a1 are intended x, y coords of frog position (unit), $a2 is fro
 	addi $sp, $sp, 12
 	jr $ra
 		
-##### Milestone 4 Functions #####
+##### Game Stats Functions #####
 AddWinToScore: # $a0 is frogData (mem address)
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -900,7 +923,7 @@ PrintData: # $a0 is frogData (mem address)
 	addi $sp, $sp, 8
 	jr $ra
 		
-##### Milestone 5 Functions #####
+##### Multiplayer Functions #####
 DrawFrogs:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
@@ -1094,6 +1117,103 @@ ShiftAllFrogs:
 		addi $sp, $sp, 4
 		jr $ra
 		
+##### Keybind Functions #####
+CheckKeybindInput: # $a0 is keyboard input (char), $v0 returns whether or not input was valid keybind input (0/1)
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	beq $a0, 'r', ResetInput
+	beq $a0, 'R', ResetInput
+	j ReturnKeybindInput
+	ResetInput:
+		jal Reset
+	
+	ReturnKeybindInput:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+
+Reset:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	jal ResetScene
+	jal ResetAllFrogs
+	jal ResetCompletedFrogs
+	sb $zero, wins
+	sb $zero, tick
+	jal LoopDraw
+	jal PrintAllData
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+		
+ResetScene:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	jal Clear
+	la $a0, initVehicles
+	la $a1, vehicles
+	li $a2, 40
+	jal Copy
+	la $a0, initLogs
+	la $a1, logs
+	li $a2, 35
+	jal Copy
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+ResetAllFrogs:
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	sw $s0, 0($sp)
+	
+	la $a0, frogData
+	jal ResetFrog
+	la $a0, frogDataMulti
+	jal ResetFrog
+	la $a0, frogDataMulti + 8
+	jal ResetFrog
+	
+	lw $s0, 0($sp)
+	lw $ra, 4($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+ResetFrog: # $a0 is frogData (mem address)
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	sw $s0, 0($sp)
+	
+	move $s0, $a0
+	addi $a0, $s0, 2
+	move $a1, $s0
+	li $a2, 2
+	jal Copy
+	li $t0, 3
+	sb $t0, 4($s0)
+	sb $zero, 5($s0)
+	sh $zero, 6($s0)
+	
+	lw $s0, 0($sp)
+	lw $ra, 4($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+ResetCompletedFrogs:
+	la $t0, completedFrogs # $t0 is current element in completedFrogs (mem address)
+	li $t1, 0 # $t1 is the number of frogs reset
+	ResetNextFrog:
+		sb $zero, 2($t0)
+		addi $t0, $t0, 3
+		addi $t1, $t1, 1
+		bne $t1, 5, ResetNextFrog
+	jr $ra
+		
 ##### Utility Functions #####
 PrintInt: # $a0 is int to print - all registers are preserved
 	addi $sp, $sp, -8
@@ -1172,6 +1292,23 @@ Contains: # $a0 is beginning of array (mem address), $a1 is length of array, $a2
 		li $v0, 1
 	ReturnContains:
 		jr $ra
+		
+Copy: # $a0 is copy source (mem address), $a1 is copy destination (mem address), $a2 is length of array	
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	li $t0, 0 # $t0 is index of current element in array
+	CopyByte:
+		lb $t1, 0($a0)
+		sb $t1, 0($a1)
+		addi $a0, $a0, 1
+		addi $a1, $a1, 1
+		addi $t0, $t0, 1
+		bne $a2, $t0, CopyByte
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
 	
 Exit:
 	jal LoopDraw
