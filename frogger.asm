@@ -171,7 +171,9 @@ LoopSecond: # uses $s0 same as main
 	sw $ra, 0($sp)
 
 	li $s0, 0
-	jal Shift
+	jal ShiftAllFrogs
+	jal ShiftRoadWater
+	jal LoopDraw
 	jal UpdateGameTime
 	
 	ReturnLoopSecond:
@@ -531,32 +533,103 @@ Move: # $a0 is move direction (w/a/s/d), $a1 is frogData (mem address)
 		addi $sp, $sp, 8
 		jr $ra
 		
-Shift:
-	la $t0, vehicles # $t0 is the address of current vehicle/log (mem address)
-	li $t1, 0 # $t1 is the number of vehicles/logs we've shifted
-	la $t2, shiftDirection # $t2 is current shiftDirection (mem address)
+ShiftRoadWater:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	la $a0, vehicles
+	li $a1, 8
+	la $a2, shiftDirection
+	jal Shift
+	la $a0, logs
+	li $a1, 7
+	la $a2, shiftDirection + 8
+	jal Shift
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+		
+Shift: # $a0 is element array (mem address), $a1 is length of element array, $a2 is shiftDirection array (mem address), $a3 is overflow amount
+	li $t0, 0 # $t0 is the number of vehicles/logs we've shifted
 	ShiftElement:
-		lb $t4, 0($t2)
-		li $t5, 6
-		mult $t4, $t5
-		mflo $t4 # $t4 is the amount to shift (unit)
-		lb $t3, 0($t0)
-		add $t3, $t3, $t4 # $t3 is the new x value of the element (unit)
-		bge $t3, 54, RightShiftOverflow
-		blt $t3, 0, LeftShiftOverflow
+		lb $t2, 0($a2)
+		li $t3, 6
+		mult $t2, $t3
+		mflo $t2 # $t2 is the amount to shift (unit)
+		lb $t1, 0($a0)
+		add $t1, $t1, $t2 # $t1 is the new x value of the element (unit)
+		bge $t1, 54, RightShiftOverflow
+		blt $t1, 0, LeftShiftOverflow
 		j ShiftDone
 		RightShiftOverflow:
-			add $t3, $t3, -54
+			add $t1, $t1, -54
 			j ShiftDone
 		LeftShiftOverflow:
-			add $t3, $t3, 54
+			add $t1, $t1, 54
 		ShiftDone:
-			sb $t3, 0($t0)
-			add $t0, $t0, 5
-			add $t1, $t1, 1
-			add $t2, $t2, 1
-			bne $t1, 15, ShiftElement
+			sb $t1, 0($a0)
+			add $a0, $a0, 5
+			add $t0, $t0, 1
+			add $a2, $a2, 1
+			bne $t0, $a1, ShiftElement
 	jr $ra
+	
+ShiftFrog: # a0 is frogData (mem address)
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	sw $s0, 0($sp)
+	
+	move $s0, $a0 # $s0 preserves frogData (mem address)
+	lb $a0, 0($s0)
+	lb $a1, 1($s0)
+	addi $a1, $a1, 1
+	jal GetPositionColour
+	bne $v0, 'w', ReturnShiftFrog
+	lb $a0, 0($s0)
+	lb $a1, 1($s0)
+	jal FindFrogLog
+	move $a0, $s0
+	li $a1, 1
+	la $a2, shiftDirection
+	add $a2, $a2, $v0
+	jal Shift
+	
+	ReturnShiftFrog:
+		lw $s0, 0($sp)
+		lw $ra, 4($sp)
+		addi $sp, $sp, 8
+		jr $ra
+		
+FindFrogLog: # $a0, $a1 are x, y coords of frog (unit), $v0 is index of frog log
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lb $t0, waterPosition
+	lb $t1, waterPosition + 1
+	sub $a0, $a0, $t0
+	sub $a1, $a1, $t1
+	la $t0, logs # $t0 is current log (mem address)
+	li $t1, 0 # $t1 is the number of logs checked
+	NextFrogLog:
+		lb $t2, 1($t0)
+		bne $a1, $t2, IterateFrogLog
+		lb $t2, 0($t0)
+		blt $a0, $t2, IterateFrogLog
+		lb $t3, 2($t0)
+		add $t2, $t2, $t3
+		bge $a0, $t2, IterateFrogLog
+		move $v0, $t1
+		j ReturnFrogLog
+		IterateFrogLog:
+			addi $t0, $t0, 5
+			addi $t1, $t1, 1
+			bne $t1, 7, NextFrogLog
+	
+	ReturnFrogLog:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
 	
 RectangleWrapped: # $a0 has x-coord of start position (unit), $a1 has y-coord of start position (unit), $a2 length (unit), $a3 height (unit), stack has colour	
 	lw $t0, 0($sp)
@@ -985,6 +1058,29 @@ PrintAllData:
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	jr $ra
+	
+ShiftAllFrogs:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lb $t0, multiPlayer
+	beqz $t0, ShiftFrogSingle
+	j ShiftFrogMulti
+	
+	ShiftFrogSingle:
+		la $a0, frogData
+		jal ShiftFrog
+		j ReturnShiftAllFrogs
+	ShiftFrogMulti:
+		la $a0, frogDataMulti
+		jal ShiftFrog
+		la $a0, frogDataMulti + 8
+		jal ShiftFrog
+	
+	ReturnShiftAllFrogs:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
 		
 ##### Utility Functions #####
 PrintInt: # $a0 is int to print - all registers are preserved
