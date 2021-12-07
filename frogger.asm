@@ -118,7 +118,7 @@
 		3, # lives 1
 		0, # game time 2
 		0, 0 # score 2 (half word)
-	multiPlayer: .byte 1
+	multiPlayer: .byte 0
 	
 	##### Keybind Data #####
 	tick: .byte 0
@@ -971,7 +971,6 @@ CheckMoveInput: # $a0 is keyboard input (char), $v0 returns whether or not input
 	
 	MoveInputSingle:
 		jal InputWASD
-		move $a0, $v1
 		beqz $v0, ReturnCheckMoveInput
 		la $a1, frogData
 		jal Move
@@ -1124,9 +1123,15 @@ CheckKeybindInput: # $a0 is keyboard input (char), $v0 returns whether or not in
 	
 	beq $a0, 'r', ResetInput
 	beq $a0, 'R', ResetInput
+	beq $a0, 'm', MultiPlayerInput
+	beq $a0, 'M', MultiPlayerInput
+	li $v0, 0
 	j ReturnKeybindInput
+	MultiPlayerInput:
+		jal ToggleMultiPlayer
 	ResetInput:
 		jal Reset
+		li $v0, 1
 	
 	ReturnKeybindInput:
 		lw $ra, 0($sp)
@@ -1212,6 +1217,13 @@ ResetCompletedFrogs:
 		addi $t0, $t0, 3
 		addi $t1, $t1, 1
 		bne $t1, 5, ResetNextFrog
+	jr $ra
+	
+ToggleMultiPlayer:
+	lb $t0, multiPlayer # $t0 is current value of multiplayer (0/1)
+	li $t1, 1
+	sub $t0, $t1, $t0
+	sb $t0, multiPlayer
 	jr $ra
 		
 ##### Utility Functions #####
