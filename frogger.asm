@@ -32,11 +32,11 @@
 	displayBuffer: .space 0x4000
 	black: .word 0x000000 # '0' - used for clear
 	white: .word 0xffffff # '1' - used for undefined values
-	red: .word 0xff0000 # 'r' - used for vehicles
+	red: .word 0xff0000 # 'r' - used for vehicles
 	green: .word 0x00ff00 # 'g' - used for safe areas
 	blue: .word 0x0000ff # 'b' - used for border
-	lightBlue: .word 0x00bfff # 'l' - stands for light - used for water
-	darkGreen: .word 0x008000 # 'f' - stands for frog - used for frog!
+	lightBlue: .word 0x00bfff # 'l' - stands for light - used for water
+	darkGreen: .word 0x008000 # 'f' - stands for frog - used for frog!
 	brown: .word 0xd2691e # 'w' - stands for wood - used for logs
 	gray: .word 0x696969 # 's' - stands for street - used for road!
 	scene: .byte 0, 0, 59, 5, 'b', # border top
@@ -118,7 +118,7 @@
 		0, # game time 2
 		0, 0 # score 2 (half word)
 	multiPlayer: .byte 1 # TODO move up if you can
-		
+
 .text
 main:
 	li $s0, 0 # $s0 is the number of times MainLoop has been run
@@ -230,7 +230,7 @@ FrogRoadWater:
 	la $a2, waterPosition
 	li $a3, 1
 	jal RectArray
-	jal DrawFrog
+	jal DrawFrogs
 	
 	ReturnFrogRoadWater:
 		lw $ra, 0($sp)
@@ -593,7 +593,14 @@ ShiftFrog: # a0 is frogData (mem address)
 	li $a1, 1
 	la $a2, shiftDirection
 	add $a2, $a2, $v0
+	
+	lb $t0, 0($s0) # correction for border in frog position
+	addi $t0, $t0, -5
+	sb $t0, 0($s0)
 	jal Shift
+	lb $t0, 0($s0)
+	addi $t0, $t0, 5
+	sb $t0, 0($s0)
 	
 	ReturnShiftFrog:
 		lw $s0, 0($sp)
@@ -612,14 +619,19 @@ FindFrogLog: # $a0, $a1 are x, y coords of frog (unit), $v0 is index of frog log
 	la $t0, logs # $t0 is current log (mem address)
 	li $t1, 0 # $t1 is the number of logs checked
 	NextFrogLog:
-		lb $t2, 1($t0)
-		bne $a1, $t2, IterateFrogLog
-		lb $t2, 0($t0)
-		blt $a0, $t2, IterateFrogLog
-		lb $t3, 2($t0)
-		add $t2, $t2, $t3
-		bge $a0, $t2, IterateFrogLog
-		move $v0, $t1
+		lb $t3, 1($t0)
+		bne $a1, $t3, IterateFrogLog
+		move $t2, $a0 # $t2 is x coord of frog (unit)
+		lb $t3, 0($t0)
+		lb $t4, 2($t0)
+		add $t3, $t3, $t4
+		ble $t3, 54, FrogLogNormal
+		addi $t2, $t2, 54
+		FrogLogNormal:
+			bge $t2, $t3, IterateFrogLog
+			lb $t3, 0($t0)
+			blt $t2, $t3, IterateFrogLog
+			move $v0, $t1
 		j ReturnFrogLog
 		IterateFrogLog:
 			addi $t0, $t0, 5
@@ -889,7 +901,7 @@ PrintData: # $a0 is frogData (mem address)
 	jr $ra
 		
 ##### Milestone 5 Functions #####
-DrawFrog:
+DrawFrogs:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
