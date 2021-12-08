@@ -87,7 +87,7 @@
 	shiftDirection: .byte 2, 2, 2, # vehicles - row 1
 		-1, -1, # vehicles - row 2
 		1, 1, 1, # vehicles - row 3
-		1, 1, # logs - row 1
+		2, 2, # logs - row 1
 		-1, -1, -1, # logs - row 2
 		1, 1 # logs - row 3
 	
@@ -614,7 +614,7 @@ ShiftFrog: # a0 is frogData (mem address)
 	jal FindFrogLog
 	move $a0, $s0
 	li $a1, 1
-	la $a2, shiftDirection
+	la $a2, shiftDirection + 8
 	add $a2, $a2, $v0
 	
 	lb $t0, 0($s0) # correction for border in frog position
